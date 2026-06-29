@@ -164,11 +164,6 @@ const Navbar = ({ view, setView, startNewDocument, handleLogout, notifCount = 0,
             <Map className="w-5 h-5" /> Daftar Tanah
           </button>
 
-          {/* MENU FLAT: DAFTAR GEDUNG */}
-          <button onClick={() => handleNavClick("bangunan_gedung")} className={`w-full px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-3 transition-colors ${view === "bangunan_gedung" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Building2 className="w-5 h-5" /> Daftar Gedung
-          </button>
-
           {/* MENU FLAT: SEWA */}
           <button onClick={() => handleNavClick("bangunan_sewa")} className={`w-full px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-3 transition-colors ${view === "bangunan_sewa" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Key className="w-5 h-5" /> Sewa
@@ -177,11 +172,6 @@ const Navbar = ({ view, setView, startNewDocument, handleLogout, notifCount = 0,
           {/* MENU FLAT: RENOVASI */}
           <button onClick={() => handleNavClick("bangunan_renovasi")} className={`w-full px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-3 transition-colors ${view === "bangunan_renovasi" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Hammer className="w-5 h-5" /> Renovasi
-          </button>
-
-          {/* MENU FLAT: GUDANG TERPADU */}
-          <button onClick={() => handleNavClick("bangunan_gudang")} className={`w-full px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-3 transition-colors ${view === "bangunan_gudang" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Warehouse className="w-5 h-5" /> Gudang Terpadu
           </button>
 
           {/* KATEGORI: PENGAMANAN DAN KORPORASI */}

@@ -57,12 +57,14 @@ Route::middleware('auth')->group(function () {
     // Lands (Daftar Tanah)
     Route::post('/building-lands', [BuildingLandController::class, 'store'])->name('building-lands.store');
     Route::put('/building-lands/{id}', [BuildingLandController::class, 'update'])->name('building-lands.update');
+    Route::put('/building-lands/{id}/status', [BuildingLandController::class, 'updateStatus'])->name('building-lands.updateStatus');
     Route::delete('/building-lands/{id}', [BuildingLandController::class, 'destroy'])->name('building-lands.destroy');
     Route::post('/building-lands/import', [BuildingLandController::class, 'import'])->name('building-lands.import');
 
     // Sewas (Sewa)
     Route::post('/building-sewas', [BuildingSewaController::class, 'store'])->name('building-sewas.store');
     Route::put('/building-sewas/{id}', [BuildingSewaController::class, 'update'])->name('building-sewas.update');
+    Route::put('/building-sewas/{id}/status', [BuildingSewaController::class, 'updateStatus'])->name('building-sewas.updateStatus');
     Route::delete('/building-sewas/{id}', [BuildingSewaController::class, 'destroy'])->name('building-sewas.destroy');
     Route::post('/building-sewas/import', [BuildingSewaController::class, 'import'])->name('building-sewas.import');
 

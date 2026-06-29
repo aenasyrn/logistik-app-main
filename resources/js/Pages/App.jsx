@@ -88,6 +88,9 @@ export default function App(props) {
   const [buildingRenovations, setBuildingRenovations] = useState(props.buildingRenovations || []);
   const [securityFacilities, setSecurityFacilities] = useState(props.securityFacilities || []);
 
+  const [landFilter, setLandFilter] = useState("");
+  const [sewaFilter, setSewaFilter] = useState("");
+
 
   // Sync state whenever props update (via Inertia reloading)
   useEffect(() => {
@@ -240,6 +243,10 @@ export default function App(props) {
             handleSaveTransaction={handleSaveTransaction}
             setView={handleSetView}
             handleUpdateRole={handleUpdateRole}
+            landFilter={landFilter}
+            setLandFilter={setLandFilter}
+            sewaFilter={sewaFilter}
+            setSewaFilter={setSewaFilter}
           />
         </div>
 

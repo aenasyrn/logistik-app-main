@@ -188,7 +188,7 @@ class BuildingRenovationController extends Controller
                     $existing = BuildingRenovation::where('no_memo', $row['no_memo'])->first();
                 }
                 if (!$existing && !empty($row['no_spk'])) {
-                    $existing = BuildingRenovation::where('no_spk', $row['no_spk'])->first();
+                    $existing = BuildingRenovation::where('nomor_spk', $row['no_spk'])->first();
                 }
                 if (!$existing && !empty($row['nama_pekerjaan'])) {
                     $existing = BuildingRenovation::where('nama_pekerjaan', $row['nama_pekerjaan'])->first();

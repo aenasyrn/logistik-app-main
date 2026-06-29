@@ -42,7 +42,10 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       (item.nama_fasilitas && item.nama_fasilitas.toLowerCase().includes(q)) ||
       (item.lokasi && item.lokasi.toLowerCase().includes(q)) ||
       (item.jenis && item.jenis.toLowerCase().includes(q)) ||
-      (item.kondisi && item.kondisi.toLowerCase().includes(q))
+      (item.kondisi && item.kondisi.toLowerCase().includes(q)) ||
+      (item.jumlah && String(item.jumlah).includes(q)) ||
+      (item.deskripsi && item.deskripsi.toLowerCase().includes(q)) ||
+      (item.keterangan && item.keterangan.toLowerCase().includes(q))
     );
   });
 

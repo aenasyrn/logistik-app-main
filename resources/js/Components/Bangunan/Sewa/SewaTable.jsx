@@ -4,6 +4,52 @@
 import React, { useState } from "react";
 import { Edit, Trash2, Eye, Calendar, User, DollarSign, Building } from "lucide-react";
 
+export const formatDate = (dateString) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+export const hitungSisaWaktu = (tanggalSelesai) => {
+  if (!tanggalSelesai) return "—";
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const tglSelesai = new Date(tanggalSelesai);
+  tglSelesai.setHours(0, 0, 0, 0);
+
+  if (tglSelesai < hariIni) return "—";
+
+  const diffTime = tglSelesai.getTime() - hariIni.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 30) {
+    return `${diffDays} hari`;
+  } else {
+    const diffMonths = (tglSelesai.getFullYear() - hariIni.getFullYear()) * 12 + (tglSelesai.getMonth() - hariIni.getMonth());
+    return `${diffMonths > 0 ? diffMonths : 0} bln`;
+  }
+};
+
+export const getStatusInfo = (sewa) => {
+  if (sewa.status === "Done" || sewa.status === "Selesai") return "Selesai";
+  if (!sewa.tgl_kontrak_berakhir && !sewa.tanggal_kontrak_berakhir) return "Aktif";
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const tglSelesai = new Date(sewa.tgl_kontrak_berakhir || sewa.tanggal_kontrak_berakhir);
+  tglSelesai.setHours(0, 0, 0, 0);
+
+  if (tglSelesai < hariIni) return "Expired";
+
+  const diffTime = tglSelesai.getTime() - hariIni.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 30) return "Hampir Habis";
+  return "Aktif";
+};
+
 export default function SewaTable({
   isLoading,
   paginatedData,
@@ -20,58 +66,16 @@ export default function SewaTable({
 }) {
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
 
   const formatHarga = (harga) => {
     if (!harga) return "—";
     return `Rp ${Number(harga).toLocaleString("id-ID")}`;
   };
 
-  const hitungSisaWaktu = (tanggalSelesai) => {
-    if (!tanggalSelesai) return "—";
-    const hariIni = new Date();
-    hariIni.setHours(0, 0, 0, 0);
-    const tglSelesai = new Date(tanggalSelesai);
-    tglSelesai.setHours(0, 0, 0, 0);
-
-    if (tglSelesai < hariIni) return "—";
-
-    const diffTime = tglSelesai.getTime() - hariIni.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 30) {
-      return `${diffDays} hari`;
-    } else {
-      const diffMonths = (tglSelesai.getFullYear() - hariIni.getFullYear()) * 12 + (tglSelesai.getMonth() - hariIni.getMonth());
-      return `${diffMonths > 0 ? diffMonths : 0} bln`;
-    }
-  };
-
-  const getStatusInfo = (sewa) => {
-    if (!sewa.tgl_kontrak_berakhir && !sewa.tanggal_kontrak_berakhir) return "Aktif";
-    const hariIni = new Date();
-    hariIni.setHours(0, 0, 0, 0);
-    const tglSelesai = new Date(sewa.tgl_kontrak_berakhir || sewa.tanggal_kontrak_berakhir);
-    tglSelesai.setHours(0, 0, 0, 0);
-
-    if (tglSelesai < hariIni) return "Expired";
-
-    const diffTime = tglSelesai.getTime() - hariIni.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 30) return "Hampir Habis";
-    return "Aktif";
-  };
-
   const getStatusBadge = (status) => {
     switch (status) {
+      case "Selesai":
+        return "bg-blue-50 text-blue-700 border-blue-200";
       case "Aktif":
         return "bg-green-50 text-green-700 border-green-200";
       case "Hampir Habis":
@@ -116,19 +120,19 @@ export default function SewaTable({
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Type Outlet</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Type Bangunan</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Jenis STO</th>
+              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Sisa Waktu</th>
+              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status</th>
+              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Harga Sewa</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status Gedung</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Periode Sewa</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Tgl. Kontrak Mulai</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Tgl. Kontrak Berakhir</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Harga Sewa</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Keterangan</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Alamat</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kelurahan</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kecamatan</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kab/Kota</th>
               <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Provinsi</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Sisa Waktu</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status</th>
               {userRole === "admin" && (
                 <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>
               )}
@@ -179,19 +183,6 @@ export default function SewaTable({
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_bangunan || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.jenis_sto || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.status_gedung || "-"}</td>
-                    <td className="p-2 border border-slate-200 text-center align-middle text-gray-600">
-                      {item.periode_sewa ? (isNaN(item.periode_sewa) ? item.periode_sewa : parseFloat(item.periode_sewa)) : "-"}
-                    </td>
-                    <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_mulai || item.tanggal_kontrak_mulai)}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir)}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-900 font-medium">{formatHarga(item.harga_sewa)}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600 truncate max-w-xs" title={item.keterangan}>{item.keterangan || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600 truncate max-w-xs" title={item.alamat}>{item.alamat || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kelurahan || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kecamatan || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kab_kota || "-"}</td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.provinsi || "-"}</td>
                     <td className="p-2 border border-slate-200 text-center align-middle font-medium text-xs">
                       <span className={status === "Hampir Habis" ? "text-red-600 font-bold" : "text-gray-700"}>
                         {hitungSisaWaktu(item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir)}
@@ -202,6 +193,19 @@ export default function SewaTable({
                         {status}
                       </span>
                     </td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-900 font-medium">{formatHarga(item.harga_sewa)}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.status_gedung || "-"}</td>
+                    <td className="p-2 border border-slate-200 text-center align-middle text-gray-600">
+                      {item.periode_sewa ? (isNaN(item.periode_sewa) ? item.periode_sewa : parseFloat(item.periode_sewa)) : "-"}
+                    </td>
+                    <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_mulai || item.tanggal_kontrak_mulai)}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir)}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600 truncate max-w-xs" title={item.keterangan}>{item.keterangan || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600 truncate max-w-xs" title={item.alamat}>{item.alamat || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kelurahan || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kecamatan || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kab_kota || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.provinsi || "-"}</td>
                     <td className="p-2 border border-slate-200 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         <button

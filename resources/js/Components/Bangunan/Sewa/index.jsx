@@ -8,13 +8,35 @@ import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 
-import SewaTable from "./SewaTable";
+import SewaTable, { hitungSisaWaktu, getStatusInfo } from "./SewaTable";
 import SewaModal from "./SewaModal";
 import ConfirmDeleteModal from "../../Modal/ConfirmDeleteModal";
 import ToastNotif from "../../Modal/ToastNotif";
 import { importSewaCSV, downloadSewaTemplate } from "../../../services/sewaService";
 
-export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
+const getDateSearchStrings = (dateString) => {
+  if (!dateString) return [];
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return [];
+  
+  const day = String(date.getDate()).padStart(2, "0");
+  const monthNum = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  
+  const slashDate = `${day}/${monthNum}/${year}`;
+  const isoDate = dateString.substring(0, 10);
+  
+  const monthsIndo = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const monthIndo = monthsIndo[date.getMonth()];
+  const indoDate = `${date.getDate()} ${monthIndo} ${year}`;
+  
+  return [slashDate.toLowerCase(), isoDate.toLowerCase(), indoDate.toLowerCase(), monthIndo.toLowerCase()];
+};
+
+export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilter = "", setSewaFilter }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -81,17 +103,56 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
   const filteredSewas = sewas.filter((item) => {
     // 1. Search Query filter
     const q = searchQuery.toLowerCase();
+    
+    // Generate date search strings for tgl_kontrak_mulai and tgl_kontrak_berakhir
+    const tglMulai = item.tgl_kontrak_mulai || item.tanggal_kontrak_mulai || item.tanggal_mulai;
+    const tglBerakhir = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir || item.tanggal_selesai;
+    
+    const datesSearchStrings = [
+      ...getDateSearchStrings(tglMulai),
+      ...getDateSearchStrings(tglBerakhir)
+    ];
+    const matchesDates = datesSearchStrings.some(dStr => dStr.includes(q));
+
+    // Calculate dynamic status and remaining time
+    const calculatedStatus = getStatusInfo(item);
+    const calculatedSisaWaktu = hitungSisaWaktu(tglBerakhir);
+
     const matchesSearch = !searchQuery || (
       (item.nama_outlet && item.nama_outlet.toLowerCase().includes(q)) ||
       (item.outlet && item.outlet.toLowerCase().includes(q)) ||
       (item.kode_outlet && item.kode_outlet.toLowerCase().includes(q)) ||
       (item.type_outlet && item.type_outlet.toLowerCase().includes(q)) ||
       (item.type_bangunan && item.type_bangunan.toLowerCase().includes(q)) ||
-      (item.keterangan && item.keterangan.toLowerCase().includes(q)) ||
-      (item.alamat && item.alamat.toLowerCase().includes(q))
+      (item.jenis_sto && item.jenis_sto.toLowerCase().includes(q)) ||
+      (item.status_gedung && item.status_gedung.toLowerCase().includes(q)) ||
+      (item.status && item.status.toLowerCase().includes(q)) ||
+      (calculatedStatus && calculatedStatus.toLowerCase().includes(q)) ||
+      (calculatedSisaWaktu && calculatedSisaWaktu.toLowerCase().includes(q)) ||
+      matchesDates ||
+      (item.periode_sewa && String(item.periode_sewa).toLowerCase().includes(q)) ||
+      (item.alamat && item.alamat.toLowerCase().includes(q)) ||
+      (item.kelurahan && item.kelurahan.toLowerCase().includes(q)) ||
+      (item.kecamatan && item.kecamatan.toLowerCase().includes(q)) ||
+      (item.kab_kota && item.kab_kota.toLowerCase().includes(q)) ||
+      (item.provinsi && item.provinsi.toLowerCase().includes(q)) ||
+      (item.keterangan && item.keterangan.toLowerCase().includes(q))
     );
 
     if (!matchesSearch) return false;
+
+    // Expiry filter via dashboard "Lihat lainnya"
+    if (sewaFilter === "expired") {
+      const targetDate = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
+      if (!targetDate) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiration = new Date(targetDate);
+      expiration.setHours(0, 0, 0, 0);
+      const diffTime = expiration.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays > 30 || item.status === "Done") return false;
+    }
 
     // 2. Expiry filter (mau habis: sisa waktu <= 30 hari)
     if (filterExpiry === "expiring_30") {
@@ -355,7 +416,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
       <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:p-0">
         
         {/* Header (Disembunyikan saat print) */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 print:hidden">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 print:hidden">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
               <Key className="w-6 h-6 text-emerald-600" /> Sewa Bangunan
@@ -365,7 +426,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={exportToExcel}
@@ -400,15 +461,6 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
                   aria-label="Upload file CSV data sewa"
                 />
               </>
-            )}
-            {userRole === "admin" && (
-              <button
-                type="button"
-                onClick={openAdd}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
-              >
-                <Plus className="w-4 h-4" /> Tambah Sewa
-              </button>
             )}
           </div>
         </div>
@@ -478,8 +530,19 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
                 )}
               </div>
 
-              <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-100 self-start lg:self-auto shrink-0">
-                Total Kontrak: {filteredSewas.length}
+              <div className="flex items-center gap-3 self-start lg:self-auto shrink-0">
+                {userRole === "admin" && (
+                  <button
+                    type="button"
+                    onClick={openAdd}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Sewa
+                  </button>
+                )}
+                <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-100 shrink-0">
+                  Total Kontrak: {filteredSewas.length}
+                </div>
               </div>
             </div>
 
@@ -559,6 +622,18 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [] }) {
               </div>
             </div>
           </div>
+
+          {sewaFilter === "expired" && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
+              <span className="font-medium">Menampilkan kontrak sewa bangunan yang mendekati masa habis kontrak / expired.</span>
+              <button 
+                onClick={() => setSewaFilter("")} 
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
 
           {/* Table */}
           <SewaTable

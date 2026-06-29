@@ -200,4 +200,29 @@ class BuildingSewaController extends Controller
             'message' => "{$importedCount} data sewa bangunan berhasil diimpor",
         ]);
     }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|string',
+        ]);
+
+        $sewa = BuildingSewa::findOrFail($id);
+        $sewa->update([
+            'status' => $request->input('status')
+        ]);
+
+        ActivityLog::create([
+            'user_email' => auth()->user()->email,
+            'action' => 'Edit',
+            'module' => 'Sewa Bangunan',
+            'details' => "Mengubah status sewa: {$sewa->nama_outlet} menjadi {$sewa->status}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status sewa berhasil diperbarui',
+            'sewa' => $sewa,
+        ]);
+    }
 }

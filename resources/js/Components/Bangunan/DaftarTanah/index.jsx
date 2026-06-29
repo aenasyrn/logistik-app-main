@@ -12,7 +12,7 @@ import ConfirmDeleteModal from "../../Modal/ConfirmDeleteModal";
 import ToastNotif from "../../Modal/ToastNotif";
 import { importLandCSV, downloadLandTemplate } from "../../../services/landService";
 
-export default function DaftarTanah({ userRole, lands = [] }) {
+export default function DaftarTanah({ userRole, lands = [], landFilter = "", setLandFilter }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -110,6 +110,16 @@ export default function DaftarTanah({ userRole, lands = [] }) {
   };
 
 
+  const hitungSisaHari = (tanggalSelesai) => {
+    if (!tanggalSelesai) return null;
+    const hariIni = new Date();
+    hariIni.setHours(0, 0, 0, 0);
+    const tglSelesai = new Date(tanggalSelesai);
+    tglSelesai.setHours(0, 0, 0, 0);
+    const diffTime = tglSelesai.getTime() - hariIni.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr || String(dateStr).trim() === "" || String(dateStr).trim() === "-") return "-";
     if (dateStr.includes("/")) return dateStr;
@@ -125,6 +135,13 @@ export default function DaftarTanah({ userRole, lands = [] }) {
 
   // Filter
   const filteredLands = lands.filter((item) => {
+    if (landFilter === "expired") {
+      const sisaHari = hitungSisaHari(item.tgl_berakhir_shgb);
+      if (sisaHari === null || sisaHari > 30 || item.status === "Done") {
+        return false;
+      }
+    }
+
     const q = searchQuery.toLowerCase();
 
     // Format dates to match display format (dd/mm/yyyy)
@@ -162,17 +179,17 @@ export default function DaftarTanah({ userRole, lands = [] }) {
     );
   });
 
-  // Sort lands to group the same unit_kerja together
+  // Sort lands so that newly added/highest 'no' shows at the very top
   const sortedLands = [...filteredLands].sort((a, b) => {
-    const noA = a.no !== null && a.no !== undefined ? Number(a.no) : 999999;
-    const noB = b.no !== null && b.no !== undefined ? Number(b.no) : 999999;
-    if (noA !== noB) return noA - noB;
+    const noA = a.no !== null && a.no !== undefined ? Number(a.no) : -999999;
+    const noB = b.no !== null && b.no !== undefined ? Number(b.no) : -999999;
+    if (noA !== noB) return noB - noA;
 
     const unitA = (a.unit_kerja || "").toLowerCase();
     const unitB = (b.unit_kerja || "").toLowerCase();
     if (unitA !== unitB) return unitA.localeCompare(unitB);
 
-    return a.id - b.id;
+    return b.id - a.id;
   });
 
   // Group the sortedLands by unit_kerja to paginate by groups (visual rows)
@@ -455,7 +472,7 @@ export default function DaftarTanah({ userRole, lands = [] }) {
       <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:hidden">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
               <Map className="w-6 h-6 text-blue-500" /> Daftar Tanah
@@ -465,7 +482,7 @@ export default function DaftarTanah({ userRole, lands = [] }) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={exportToExcel}
@@ -499,17 +516,22 @@ export default function DaftarTanah({ userRole, lands = [] }) {
                   className="hidden"
                   aria-label="Upload file CSV data tanah"
                 />
-                <button
-                  type="button"
-                  onClick={openAdd}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" /> Tambah Tanah
-                </button>
               </>
             )}
           </div>
         </div>
+
+        {landFilter === "expired" && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
+            <span className="font-medium">Menampilkan aset tanah yang mendekati masa habis berlaku SHGB / expired.</span>
+            <button 
+              onClick={() => setLandFilter("")} 
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+            >
+              Hapus Filter
+            </button>
+          </div>
+        )}
 
         {/* Tabel Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -549,8 +571,19 @@ export default function DaftarTanah({ userRole, lands = [] }) {
                 <span>entries</span>
               </div>
             </div>
-            <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold">
-              Total Lahan: {filteredLands.length}
+            <div className="flex items-center gap-3">
+              {userRole === "admin" && (
+                <button
+                  type="button"
+                  onClick={openAdd}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Tanah
+                </button>
+              )}
+              <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                Total Lahan: {filteredLands.length}
+              </div>
             </div>
           </div>
 

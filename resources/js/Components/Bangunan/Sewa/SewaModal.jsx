@@ -185,12 +185,19 @@ export default function SewaModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Harga Sewa (Rp/bulan) *</label>
                 <input
                   required
-                  type="number"
-                  value={formData.harga_sewa || ""}
-                  onChange={(e) => setFormData((p) => ({ ...p, harga_sewa: e.target.value }))}
+                  type="text"
+                  value={
+                    formData.harga_sewa !== null && formData.harga_sewa !== undefined && formData.harga_sewa !== ""
+                      ? Number(String(formData.harga_sewa).replace(/[^0-9]/g, "")).toLocaleString("id-ID")
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, "");
+                    setFormData((p) => ({ ...p, harga_sewa: rawValue }));
+                  }}
                   disabled={isSaving}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-                  placeholder="Contoh: 12000000"
+                  placeholder="Contoh: 12.000.000"
                 />
               </div>
             </div>

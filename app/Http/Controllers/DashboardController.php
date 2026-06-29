@@ -36,7 +36,7 @@ class DashboardController extends Controller
             'buildingLands' => BuildingLand::orderBy('id', 'desc')->get(),
 
             'buildingSewas' => BuildingSewa::orderBy('id', 'desc')->get(),
-            'buildingRenovations' => BuildingRenovation::orderBy('id', 'asc')->get(),
+            'buildingRenovations' => BuildingRenovation::orderBy('id', 'desc')->get(),
             'securityFacilities' => SecurityFacility::all(),
 
         ]);

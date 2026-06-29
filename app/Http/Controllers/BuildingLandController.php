@@ -162,4 +162,29 @@ class BuildingLandController extends Controller
             'message' => "{$importedCount} data tanah berhasil diimpor",
         ]);
     }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|string',
+        ]);
+
+        $land = BuildingLand::findOrFail($id);
+        $land->update([
+            'status' => $request->input('status')
+        ]);
+
+        ActivityLog::create([
+            'user_email' => auth()->user()->email,
+            'action' => 'Edit',
+            'module' => 'Daftar Tanah',
+            'details' => "Mengubah status tanah: {$land->unit_kerja} menjadi {$land->status}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status tanah berhasil diperbarui',
+            'land' => $land,
+        ]);
+    }
 }

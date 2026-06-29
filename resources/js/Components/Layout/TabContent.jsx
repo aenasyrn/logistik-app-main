@@ -57,6 +57,10 @@ export default function TabContent({
   setView,
   user,
   handleUpdateRole,
+  landFilter,
+  setLandFilter,
+  sewaFilter,
+  setSewaFilter,
 }) {
   const has = (id) => tabs.some((t) => t.id === id);
 
@@ -75,6 +79,13 @@ export default function TabContent({
             notifSewaKomputer={notifSewaKomputer}
             printers={printers}
             computers={computers}
+            buildingLands={buildingLands}
+            buildingSewas={buildingSewas}
+            buildingRenovations={buildingRenovations}
+            landFilter={landFilter}
+            setLandFilter={setLandFilter}
+            sewaFilter={sewaFilter}
+            setSewaFilter={setSewaFilter}
           />
         </Panel>
       )}
@@ -131,7 +142,12 @@ export default function TabContent({
 
       {has("bangunan_tanah") && (
         <Panel id="bangunan_tanah" activeTab={activeTab}>
-          <BangunanTanah userRole={userRole} lands={buildingLands} />
+          <BangunanTanah 
+            userRole={userRole} 
+            lands={buildingLands} 
+            landFilter={landFilter} 
+            setLandFilter={setLandFilter} 
+          />
         </Panel>
       )}
 
@@ -139,7 +155,13 @@ export default function TabContent({
 
       {has("bangunan_sewa") && (
         <Panel id="bangunan_sewa" activeTab={activeTab}>
-          <BangunanSewa userRole={userRole} sewas={buildingSewas} outlets={outlets} />
+          <BangunanSewa 
+            userRole={userRole} 
+            sewas={buildingSewas} 
+            outlets={outlets} 
+            sewaFilter={sewaFilter} 
+            setSewaFilter={setSewaFilter} 
+          />
         </Panel>
       )}
 

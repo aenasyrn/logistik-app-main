@@ -12,8 +12,79 @@ import ConfirmDeleteModal from "../../Modal/ConfirmDeleteModal";
 import ToastNotif from "../../Modal/ToastNotif";
 import { importRenovationCSV, downloadRenovationTemplate } from "../../../services/renovationService";
 
+const getDateSearchStrings = (dateString) => {
+  if (!dateString) return [];
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return [];
+  
+  const day = String(date.getDate()).padStart(2, "0");
+  const monthNum = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  
+  const slashDate = `${day}/${monthNum}/${year}`;
+  const isoDate = dateString.substring(0, 10);
+  
+  const monthsIndo = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const monthIndo = monthsIndo[date.getMonth()];
+  const indoDate = `${date.getDate()} ${monthIndo} ${year}`;
+  
+  return [slashDate.toLowerCase(), isoDate.toLowerCase(), indoDate.toLowerCase(), monthIndo.toLowerCase()];
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  if (isNaN(date)) return "-";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const formatBiaya = (biaya) => {
+  if (biaya === null || biaya === undefined || Number(biaya) === 0) return "—";
+  const rounded = Math.round(Number(biaya));
+  return `Rp ${rounded.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
+
+const formatDesimal = (val) => {
+  if (val === null || val === undefined || val === "" || Number(val) === 0) return "—";
+  return Number(val).toLocaleString("id-ID");
+};
+
+// Nilai disimpan di database sebagai desimal (contoh: 0.95 = 95%)
+const formatPersentase = (nilai) => {
+  if (nilai === null || nilai === undefined || nilai === "" || Number(nilai) === 0) return "—";
+  const num = Number(nilai) * 100;
+  // Hindari angka desimal panjang akibat floating point (contoh: 94.99999999%)
+  const rounded = Math.round(num * 100) / 100;
+  return `${rounded.toLocaleString("id-ID")}%`;
+};
+
 export default function Renovasi({ userRole, renovations = [] }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const searchTimeoutRef = useRef(null);
+
+  const handleSearchChange = (val) => {
+    setInputValue(val);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (val === "") {
+      setSearchQuery("");
+      setCurrentPage(1);
+    } else {
+      searchTimeoutRef.current = setTimeout(() => {
+        setSearchQuery(val);
+        setCurrentPage(1);
+      }, 300);
+    }
+  };
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -67,6 +138,19 @@ export default function Renovasi({ userRole, renovations = [] }) {
     setNotif({ show: true, message, type });
   };
 
+  const handleRupiahChange = (field, val) => {
+    const rawValue = val.replace(/[^0-9]/g, "");
+    setFormData((p) => ({ ...p, [field]: rawValue }));
+  };
+
+  const getRupiahValue = (field) => {
+    const val = formData[field];
+    if (val === null || val === undefined || val === "") return "";
+    const cleanVal = String(val).replace(/[^0-9]/g, "");
+    if (!cleanVal) return "";
+    return Number(cleanVal).toLocaleString("id-ID");
+  };
+
   // Filter
   const filteredRenovations = renovations.filter((item) => {
     if (statusGedungFilter) {
@@ -74,14 +158,56 @@ export default function Renovasi({ userRole, renovations = [] }) {
         return false;
       }
     }
+    if (!searchQuery) return true;
+
     const q = searchQuery.toLowerCase();
+    
+    // Formatting numbers to match search
+    const nilaiPembayaranPercent = (item.nilai_pembayaran !== null && item.nilai_pembayaran !== undefined && item.nilai_pembayaran !== "") 
+      ? formatPersentase(item.nilai_pembayaran).toLowerCase() 
+      : "";
+    const nilaiSpkFormatted = item.nilai_spk_pelaksanaan ? Number(item.nilai_spk_pelaksanaan).toLocaleString("id-ID").toLowerCase() : "";
+    const statusGedungStr = (item.status_gedung || "").toLowerCase();
+    const statusStr = (item.status || "").toLowerCase();
+
+    // Pajak PPH search strings
+    const pajakPphStr = item.pajak_pph ? formatDesimal(item.pajak_pph).toLowerCase() : "";
+    const pajakPphRaw = item.pajak_pph ? String(item.pajak_pph) : "";
+    const tagihanPphStr = item.tagihan_pph ? formatBiaya(item.tagihan_pph).toLowerCase() : "";
+    const tagihanPphRaw = item.tagihan_pph ? String(item.tagihan_pph) : "";
+    const retensiPphStr = item.retensi_pph ? formatBiaya(item.retensi_pph).toLowerCase() : "";
+    const retensiPphRaw = item.retensi_pph ? String(item.retensi_pph) : "";
+
+    // Date search strings
+    const datesSearchStrings = [
+      ...getDateSearchStrings(item.tgl_memo),
+      ...getDateSearchStrings(item.tgl_tagihan),
+      ...getDateSearchStrings(item.tgl_spk),
+      ...getDateSearchStrings(item.tgl_bap_bast)
+    ];
+    const matchesDates = datesSearchStrings.some(dStr => dStr.includes(q));
+
     return (
       (item.nama_pekerjaan && item.nama_pekerjaan.toLowerCase().includes(q)) ||
       (item.no_memo && item.no_memo.toLowerCase().includes(q)) ||
       (item.nama_outlet && item.nama_outlet.toLowerCase().includes(q)) ||
       (item.cabang && item.cabang.toLowerCase().includes(q)) ||
       (item.pelaksana_pekerjaan && item.pelaksana_pekerjaan.toLowerCase().includes(q)) ||
-      (item.no_spk && item.no_spk.toLowerCase().includes(q))
+      (item.no_spk && item.no_spk.toLowerCase().includes(q)) ||
+      (item.bank && item.bank.toLowerCase().includes(q)) ||
+      (item.norek && String(item.norek).includes(q)) ||
+      (item.no_rekening && String(item.no_rekening).includes(q)) ||
+      (statusGedungStr && statusGedungStr.includes(q)) ||
+      (statusStr && statusStr.includes(q)) ||
+      (nilaiPembayaranPercent && nilaiPembayaranPercent.includes(q)) ||
+      (nilaiSpkFormatted && nilaiSpkFormatted.includes(q)) ||
+      (pajakPphStr && pajakPphStr.includes(q)) ||
+      (pajakPphRaw && pajakPphRaw.includes(q)) ||
+      (tagihanPphStr && tagihanPphStr.includes(q)) ||
+      (tagihanPphRaw && tagihanPphRaw.includes(q)) ||
+      (retensiPphStr && retensiPphStr.includes(q)) ||
+      (retensiPphRaw && retensiPphRaw.includes(q)) ||
+      matchesDates
     );
   });
 
@@ -111,35 +237,7 @@ export default function Renovasi({ userRole, renovations = [] }) {
     return pages;
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    if (isNaN(date)) return "-";
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
 
-  const formatBiaya = (biaya) => {
-    if (biaya === null || biaya === undefined || Number(biaya) === 0) return "—";
-    const rounded = Math.round(Number(biaya));
-    return `Rp ${rounded.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
-
-  const formatDesimal = (val) => {
-    if (val === null || val === undefined || val === "" || Number(val) === 0) return "—";
-    return Number(val).toLocaleString("id-ID");
-  };
-
-  // Nilai disimpan di database sebagai desimal (contoh: 0.95 = 95%)
-  const formatPersentase = (nilai) => {
-    if (nilai === null || nilai === undefined || nilai === "" || Number(nilai) === 0) return "—";
-    const num = Number(nilai) * 100;
-    // Hindari angka desimal panjang akibat floating point (contoh: 94.99999999%)
-    const rounded = Math.round(num * 100) / 100;
-    return `${rounded.toLocaleString("id-ID")}%`;
-  };
 
   const getCellClass = (item, extraClass = "") => {
     const isSelected = selectedId === item.id;
@@ -433,7 +531,7 @@ export default function Renovasi({ userRole, renovations = [] }) {
       <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:hidden">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
               <Hammer className="w-6 h-6 text-orange-500" /> Renovasi Gedung
@@ -443,7 +541,7 @@ export default function Renovasi({ userRole, renovations = [] }) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={exportToExcel}
@@ -477,13 +575,6 @@ export default function Renovasi({ userRole, renovations = [] }) {
                   className="hidden"
                   aria-label="Upload file CSV data renovasi"
                 />
-                <button
-                  type="button"
-                  onClick={openAdd}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" /> Tambah Renovasi
-                </button>
               </>
             )}
           </div>
@@ -501,11 +592,8 @@ export default function Renovasi({ userRole, renovations = [] }) {
                   <input
                     type="text"
                     placeholder="Cari memo, pekerjaan, kontraktor..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    value={inputValue}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                   />
                 </div>
@@ -530,8 +618,19 @@ export default function Renovasi({ userRole, renovations = [] }) {
                 </div>
               </div>
 
-              <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-xl text-xs font-semibold self-start sm:self-auto">
-                Total Proyek: {filteredRenovations.length}
+              <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+                {userRole === "admin" && (
+                  <button
+                    type="button"
+                    onClick={openAdd}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Renovasi
+                  </button>
+                )}
+                <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                  Total Proyek: {filteredRenovations.length}
+                </div>
               </div>
             </div>
 
@@ -900,9 +999,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Nilai SPK Pelaksanaan</label>
                       <input
-                        type="number"
-                        value={formData.nilai_spk_pelaksanaan}
-                        onChange={(e) => setFormData((p) => ({ ...p, nilai_spk_pelaksanaan: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("nilai_spk_pelaksanaan")}
+                        onChange={(e) => handleRupiahChange("nilai_spk_pelaksanaan", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
                         placeholder="0"
@@ -911,9 +1010,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Nilai Addendum SPK</label>
                       <input
-                        type="number"
-                        value={formData.nilai_addendum_spk}
-                        onChange={(e) => setFormData((p) => ({ ...p, nilai_addendum_spk: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("nilai_addendum_spk")}
+                        onChange={(e) => handleRupiahChange("nilai_addendum_spk", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
                         placeholder="0"
@@ -922,9 +1021,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Pajak PPh (Rp)</label>
                       <input
-                        type="number"
-                        value={formData.pajak_pph}
-                        onChange={(e) => setFormData((p) => ({ ...p, pajak_pph: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("pajak_pph")}
+                        onChange={(e) => handleRupiahChange("pajak_pph", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
                         placeholder="0"
@@ -960,9 +1059,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">Nilai Tagihan</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_nilai}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_nilai: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_nilai")}
+                        onChange={(e) => handleRupiahChange("tagihan_nilai", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -971,9 +1070,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">DPP</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_dpp}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_dpp: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_dpp")}
+                        onChange={(e) => handleRupiahChange("tagihan_dpp", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -982,9 +1081,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">PPN</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_ppn}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_ppn: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_ppn")}
+                        onChange={(e) => handleRupiahChange("tagihan_ppn", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -993,9 +1092,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">PPH</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_pph}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_pph: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_pph")}
+                        onChange={(e) => handleRupiahChange("tagihan_pph", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1004,9 +1103,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">Retensi</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_retensi}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_retensi: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_retensi")}
+                        onChange={(e) => handleRupiahChange("tagihan_retensi", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1015,9 +1114,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">Transfer</label>
                       <input
-                        type="number"
-                        value={formData.tagihan_transfer}
-                        onChange={(e) => setFormData((p) => ({ ...p, tagihan_transfer: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("tagihan_transfer")}
+                        onChange={(e) => handleRupiahChange("tagihan_transfer", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold text-emerald-600"
                         placeholder="0"
@@ -1033,9 +1132,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">Retensi 5%</label>
                       <input
-                        type="number"
-                        value={formData.retensi_nilai}
-                        onChange={(e) => setFormData((p) => ({ ...p, retensi_nilai: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("retensi_nilai")}
+                        onChange={(e) => handleRupiahChange("retensi_nilai", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1044,9 +1143,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">DPP</label>
                       <input
-                        type="number"
-                        value={formData.retensi_dpp}
-                        onChange={(e) => setFormData((p) => ({ ...p, retensi_dpp: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("retensi_dpp")}
+                        onChange={(e) => handleRupiahChange("retensi_dpp", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1055,9 +1154,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">PPN Retensi 5%</label>
                       <input
-                        type="number"
-                        value={formData.retensi_ppn}
-                        onChange={(e) => setFormData((p) => ({ ...p, retensi_ppn: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("retensi_ppn")}
+                        onChange={(e) => handleRupiahChange("retensi_ppn", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1066,9 +1165,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">PPH Retensi 5%</label>
                       <input
-                        type="number"
-                        value={formData.retensi_pph}
-                        onChange={(e) => setFormData((p) => ({ ...p, retensi_pph: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("retensi_pph")}
+                        onChange={(e) => handleRupiahChange("retensi_pph", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                         placeholder="0"
@@ -1077,9 +1176,9 @@ export default function Renovasi({ userRole, renovations = [] }) {
                     <div>
                       <label className="block text-[10px] font-semibold text-gray-600 mb-1">Transfer</label>
                       <input
-                        type="number"
-                        value={formData.retensi_transfer}
-                        onChange={(e) => setFormData((p) => ({ ...p, retensi_transfer: e.target.value }))}
+                        type="text"
+                        value={getRupiahValue("retensi_transfer")}
+                        onChange={(e) => handleRupiahChange("retensi_transfer", e.target.value)}
                         disabled={isSaving}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold text-emerald-600"
                         placeholder="0"
