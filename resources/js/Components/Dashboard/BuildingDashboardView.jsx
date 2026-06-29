@@ -20,9 +20,53 @@ export default function BuildingDashboardView({
 }) {
 
   // State for Year Filter on stats & charts
-  const [selectedYear, setSelectedYear] = React.useState("2024");
+  const [selectedYear, setSelectedYear] = React.useState(() => String(new Date().getFullYear()));
   const [hoveredTrendIdx, setHoveredTrendIdx] = React.useState(null);
   const [hoveredShgbTrendIdx, setHoveredShgbTrendIdx] = React.useState(null);
+
+  // Generate list of available years from data
+  const availableYears = React.useMemo(() => {
+    const years = new Set();
+    const currentYear = new Date().getFullYear();
+    years.add(currentYear);
+    years.add(currentYear - 1);
+    years.add(currentYear - 2);
+    years.add(currentYear + 1);
+
+    buildingLands.forEach((item) => {
+      [item.tgl_mulai_shgb, item.tgl_berakhir_shgb].forEach((dStr) => {
+        if (dStr) {
+          const y = new Date(dStr).getFullYear();
+          if (y && !isNaN(y) && y >= 2010 && y <= 2040) years.add(y);
+        }
+      });
+    });
+
+    buildingSewas.forEach((item) => {
+      [
+        item.tgl_kontrak_mulai,
+        item.tanggal_kontrak_mulai,
+        item.tgl_kontrak_berakhir,
+        item.tanggal_kontrak_berakhir
+      ].forEach((dStr) => {
+        if (dStr) {
+          const y = new Date(dStr).getFullYear();
+          if (y && !isNaN(y) && y >= 2010 && y <= 2040) years.add(y);
+        }
+      });
+    });
+
+    buildingRenovations.forEach((item) => {
+      [item.tgl_memo, item.tgl_tagihan, item.tgl_spk, item.tgl_bap_bast].forEach((dStr) => {
+        if (dStr) {
+          const y = new Date(dStr).getFullYear();
+          if (y && !isNaN(y) && y >= 2010 && y <= 2040) years.add(y);
+        }
+      });
+    });
+
+    return Array.from(years).sort((a, b) => a - b);
+  }, [buildingLands, buildingSewas, buildingRenovations]);
 
   // Helper to determine status info for sewa contracts
   const getStatusInfo = (sewa) => {
@@ -729,12 +773,13 @@ export default function BuildingDashboardView({
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 cursor-pointer shadow-2xs hover:bg-gray-55 transition-all"
+              className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 cursor-pointer shadow-sm hover:bg-slate-50 hover:border-slate-350 transition-all outline-none"
             >
-              <option value="2024">Jan 2024 - Des 2024</option>
-              <option value="2025">Jan 2025 - Des 2025</option>
-              <option value="2026">Jan 2026 - Des 2026</option>
-              <option value="2027">Jan 2027 - Des 2027</option>
+              {availableYears.map((year) => (
+                <option key={year} value={String(year)}>
+                  Jan {year} - Des {year}
+                </option>
+              ))}
             </select>
           </div>
 
