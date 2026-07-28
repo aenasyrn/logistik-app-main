@@ -174,6 +174,11 @@ const Navbar = ({ view, setView, startNewDocument, handleLogout, notifCount = 0,
             <Hammer className="w-5 h-5" /> Renovasi
           </button>
 
+          {/* MENU FLAT: SPK */}
+          <button onClick={() => handleNavClick("bangunan_spk")} className={`w-full px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-3 transition-colors ${view === "bangunan_spk" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <FileText className="w-5 h-5" /> Buat Surat SPK
+          </button>
+
           {/* KATEGORI: PENGAMANAN DAN KORPORASI */}
           <div className="pt-4 pb-1 border-t border-gray-100 mt-2">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-4">Pengamanan dan Korporasi</span>

@@ -7,7 +7,7 @@ import {
   DataPrinter, DataKomputer, KelolaUser,
   RiwayatTransaksi, LogAktivitas,
   BangunanTanah, BangunanSewa,
-  BangunanRenovasi, BangunanSarana,
+  BangunanRenovasi, BangunanSarana, BangunanSPK,
 } from "./LazyComponents";
 
 /** Panel pembungkus: tampil jika active, sembunyi jika tidak */
@@ -177,6 +177,13 @@ export default function TabContent({
         </Panel>
       )}
 
+
+
+      {has("bangunan_spk") && (
+        <Panel id="bangunan_spk" activeTab={activeTab}>
+          <BangunanSPK />
+        </Panel>
+      )}
 
 
       {has("riwayat") && (

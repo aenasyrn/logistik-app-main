@@ -18,7 +18,7 @@ export const VIEW_TITLES = {
   bangunan_sewa:      "Sewa Bangunan",
   bangunan_renovasi:  "Renovasi Gedung",
   bangunan_sarana:    "Pengamanan dan Korporasi",
-
+  bangunan_spk:       "Buat Surat SPK",
 };
 
 /** Tab awal saat aplikasi pertama kali dibuka */
