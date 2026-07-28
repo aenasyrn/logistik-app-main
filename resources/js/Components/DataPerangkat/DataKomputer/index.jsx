@@ -14,13 +14,13 @@ import QrLabelModal         from "./QrLabelModal";
 import ConfirmDeleteModal   from "../../Modal/ConfirmDeleteModal";
 import ToastNotif           from "../../Modal/ToastNotif";
 
-export default function DataKomputer({ userRole, computers, outlets, inventory }) {
+export default function DataKomputer({ userRole, computers, outlets, inventory, filterStatus: propFilterStatus, setFilterStatus: propSetFilterStatus }) {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
 
   const {
     downloadTemplate, fileInputRef, isSaving, handleFileUpload,
     openModalForAdd, koneksiError,
-    searchQuery, handleSearch, filterStatus, handleFilterStatus,
+    searchQuery, handleSearch, filterStatus, handleFilterStatus, resetFilters,
     isLoading, paginatedData, filteredData,
     currentPage, totalPages, startIndex, itemsPerPage, setCurrentPage,
     openModalForEdit, handleDelete,
@@ -30,7 +30,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory }
     outletsList, inventoryList,
     handleSave, handleOutletChange, handleProdukChange, handleDateChange,
     qrModalData, exportToExcel,
-  } = useKomputerData(computers, outlets, inventory);
+  } = useKomputerData(computers, outlets, inventory, propFilterStatus, propSetFilterStatus);
 
   // Tampilkan konfirmasi sebelum hapus
   const askDelete = (id, nama) => setDeleteConfirm({ show: true, id, name: nama });
@@ -47,7 +47,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory }
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
               <Monitor className="w-6 h-6 text-blue-600" /> Manajemen Data Komputer
             </h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -55,33 +55,33 @@ export default function DataKomputer({ userRole, computers, outlets, inventory }
             </p>
           </div>
 
-          {userRole === "admin" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={downloadTemplate}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm">
-                <FileSpreadsheet className="w-4 h-4" /> Template CSV
-              </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={exportToExcel}
+              disabled={filteredData.length === 0}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export Excel
+            </button>
+            {userRole === "admin" && (
+              <>
+                <button type="button" onClick={downloadTemplate}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm">
+                  <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                </button>
 
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving}
-                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm disabled:opacity-50">
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Import CSV
-              </button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving}
+                  className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50">
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Import CSV
+                </button>
 
-              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload}
-                className="hidden" aria-label="Upload file CSV data komputer" />
-
-              <button type="button" onClick={exportToExcel} disabled={filteredData.length === 0}
-                className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm disabled:opacity-50">
-                <FileSpreadsheet className="w-4 h-4" /> Export Excel
-              </button>
-
-              <button type="button" onClick={openModalForAdd}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm">
-                <Plus className="w-4 h-4" /> Tambah PC
-              </button>
-            </div>
-          )}
+                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload}
+                  className="hidden" aria-label="Upload file CSV data komputer" />
+              </>
+            )}
+          </div>
         </div>
 
         {/* ── Error koneksi ── */}
@@ -96,28 +96,101 @@ export default function DataKomputer({ userRole, computers, outlets, inventory }
         )}
 
         {/* ── Card tabel ── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Search & Filter */}
-          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row gap-4 justify-between items-center">
-            <div className="relative w-full md:w-80">
-              <Search className="h-4 w-4 text-gray-400 absolute left-3 top-3" />
-              <input type="text" placeholder="Cari IP, model, S/N, atau outlet..."
-                value={searchQuery} onChange={handleSearch} aria-label="Cari data komputer"
-                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Search Toolbar */}
+          <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/30 flex flex-col gap-4">
+            {/* Row 1: Search, Entries & Add Button */}
+            <div className="flex flex-col xl:flex-row justify-between items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+                <div className="relative w-full sm:w-80">
+                  <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    placeholder="Cari IP, model, S/N, atau outlet..."
+                    value={searchQuery}
+                    onChange={handleSearch}
+                    aria-label="Cari data komputer"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+
+                {/* Show Entries Dropdown */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-600 self-start sm:self-auto">
+                  <span>Show</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={10000}>All</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+                
+                {/* Reset Filters button if any filter active */}
+                {(filterStatus !== "Semua" || searchQuery !== "") && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 self-start sm:self-auto"
+                  >
+                    Reset Filter
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 w-full xl:w-auto justify-between xl:justify-start">
+                {userRole === "admin" && (
+                  <button
+                    type="button"
+                    onClick={openModalForAdd}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah PC
+                  </button>
+                )}
+                <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                  Total Komputer: {filteredData.length}
+                </div>
+              </div>
             </div>
-            <div className="flex gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:flex-none">
-                <select value={filterStatus} onChange={handleFilterStatus} aria-label="Filter status"
-                  className="w-full pl-10 pr-8 py-2 bg-white border border-gray-200 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700">
-                  <option value="Semua">Semua Status</option>
+
+            {/* Row 2: Filter Status & Kondisi */}
+            <div className="flex flex-col items-start pt-2 border-t border-slate-100/50">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wider uppercase mb-1.5">
+                STATUS & KONDISI
+              </span>
+              <div className="relative w-full max-w-xs">
+                <select
+                  value={filterStatus}
+                  onChange={handleFilterStatus}
+                  aria-label="Filter status dan kondisi"
+                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+                >
+                  <option value="Semua">Semua Status & Kondisi</option>
+                  {filterStatus === "warning" && (
+                    <option value="warning">Peringatan Sewa</option>
+                  )}
                   <option value="Inventaris">Inventaris</option>
                   <option value="Sewa Berjalan">Sewa Berjalan</option>
                   <option value="Sewa Habis">Sewa Habis</option>
                 </select>
-                <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
+
+
 
           {/* Tabel */}
           <KomputerTable
@@ -170,7 +243,10 @@ export default function DataKomputer({ userRole, computers, outlets, inventory }
         show={notif.show}
         message={notif.message}
         type={notif.type}
-        onClose={() => setNotif({ show: false, message: "", type: "" })}
+        onClose={() => {
+          setNotif({ show: false, message: "", type: "" });
+          if (notif.onOk) notif.onOk();
+        }}
       />
     </>
   );

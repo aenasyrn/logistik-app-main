@@ -12,6 +12,8 @@ use App\Http\Controllers\BuildingLandController;
 use App\Http\Controllers\BuildingSewaController;
 use App\Http\Controllers\BuildingRenovationController;
 use App\Http\Controllers\SecurityFacilityController;
+use App\Http\Controllers\SpkHistoryController;
+use App\Http\Controllers\SoppHistoryController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -29,11 +31,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/outlets', [OutletController::class, 'store'])->name('outlets.store');
     Route::put('/outlets/{id}', [OutletController::class, 'update'])->name('outlets.update');
     Route::delete('/outlets/{id}', [OutletController::class, 'destroy'])->name('outlets.destroy');
+    Route::post('/outlets/import', [OutletController::class, 'import'])->name('outlets.import');
 
     // Inventories (Master Barang)
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
     Route::put('/inventory/{id}', [InventoryController::class, 'update'])->name('inventory.update');
     Route::delete('/inventory/{id}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
+    Route::post('/inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
 
     // Computers (Data PC)
     Route::post('/computers', [ComputerController::class, 'store'])->name('computers.store');
@@ -77,9 +81,21 @@ Route::middleware('auth')->group(function () {
     // Security Facilities (Sarana Pengamanan & Keamanan)
     Route::post('/security-facilities', [SecurityFacilityController::class, 'store'])->name('security-facilities.store');
     Route::put('/security-facilities/{id}', [SecurityFacilityController::class, 'update'])->name('security-facilities.update');
+    Route::put('/security-facilities/{id}/status', [SecurityFacilityController::class, 'updateStatus'])->name('security-facilities.update-status');
     Route::delete('/security-facilities/{id}', [SecurityFacilityController::class, 'destroy'])->name('security-facilities.destroy');
+    Route::post('/security-facilities/import', [SecurityFacilityController::class, 'import'])->name('security-facilities.import');
 
+    // SPK Histories
+    Route::get('/spk-histories', [SpkHistoryController::class, 'index'])->name('spk-histories.index');
+    Route::get('/spk-histories/{id}', [SpkHistoryController::class, 'show'])->name('spk-histories.show');
+    Route::post('/spk-histories', [SpkHistoryController::class, 'store'])->name('spk-histories.store');
+    Route::delete('/spk-histories/{id}', [SpkHistoryController::class, 'destroy'])->name('spk-histories.destroy');
 
+    // SOPP Histories
+    Route::get('/sopp-histories', [SoppHistoryController::class, 'index'])->name('sopp-histories.index');
+    Route::get('/sopp-histories/{id}', [SoppHistoryController::class, 'show'])->name('sopp-histories.show');
+    Route::post('/sopp-histories', [SoppHistoryController::class, 'store'])->name('sopp-histories.store');
+    Route::delete('/sopp-histories/{id}', [SoppHistoryController::class, 'destroy'])->name('sopp-histories.destroy');
 });
 
 require __DIR__.'/auth.php';

@@ -7,7 +7,7 @@ import { useKomputerCRUD }   from "./useKomputerCRUD";
 import { useKomputerFilter } from "./useKomputerFilter";
 import { useKomputerActions } from "./useKomputerActions";
 
-export function useKomputerData(initialComputers = [], initialOutlets = [], initialInventory = []) {
+export function useKomputerData(initialComputers = [], initialOutlets = [], initialInventory = [], propFilterStatus, propSetFilterStatus) {
   const [computerData, setComputerData]   = useState(initialComputers);
   const [outletsList, setOutletsList]     = useState(initialOutlets);
   const [inventoryList, setInventoryList] = useState(initialInventory);
@@ -16,9 +16,8 @@ export function useKomputerData(initialComputers = [], initialOutlets = [], init
   const [notif, setNotif]                 = useState({ show: false, message: "", type: "" });
   const [qrModalData, setQrModalData]     = useState(null);
 
-  const showNotif = (message, type = "success") => {
-    setNotif({ show: true, message, type });
-    setTimeout(() => setNotif({ show: false, message: "", type: "" }), 3500);
+  const showNotif = (message, type = "success", onOk = null) => {
+    setNotif({ show: true, message, type, onOk });
   };
 
   useEffect(() => {
@@ -28,7 +27,7 @@ export function useKomputerData(initialComputers = [], initialOutlets = [], init
   }, [initialComputers, initialOutlets, initialInventory]);
 
   const crud    = useKomputerCRUD({ computerData, setComputerData, showNotif });
-  const filter  = useKomputerFilter(computerData);
+  const filter  = useKomputerFilter(computerData, propFilterStatus, propSetFilterStatus);
   const actions = useKomputerActions({
     filteredData: filter.filteredData,
     setIsSaving:  crud.setIsSaving,
@@ -40,7 +39,7 @@ export function useKomputerData(initialComputers = [], initialOutlets = [], init
     crud.setFormData((prev) => ({
       ...prev,
       outlet:   e.target.value,
-      idOutlet: selectedOutlet ? selectedOutlet.kode : "",
+      idOutlet: selectedOutlet ? selectedOutlet.id : "",
     }));
   };
 

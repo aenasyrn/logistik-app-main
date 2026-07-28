@@ -28,6 +28,7 @@ class BuildingSewaController extends Controller
             'kecamatan' => $request->input('kecamatan'),
             'kab_kota' => $request->input('kab_kota') ?? $request->input('kabKota'),
             'provinsi' => $request->input('provinsi'),
+            'status' => $request->input('status'),
         ]);
     }
 
@@ -53,6 +54,7 @@ class BuildingSewaController extends Controller
             'kecamatan' => 'nullable|string',
             'kab_kota' => 'nullable|string',
             'provinsi' => 'nullable|string',
+            'status' => 'nullable|string|max:50',
         ]);
 
         $sewa = BuildingSewa::create($data);
@@ -90,6 +92,7 @@ class BuildingSewaController extends Controller
                 'kecamatan' => 'nullable|string',
                 'kab_kota' => 'nullable|string',
                 'provinsi' => 'nullable|string',
+                'status' => 'nullable|string|max:50',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Illuminate\Support\Facades\Log::error('Validation failed during sewa update: ' . json_encode($e->errors()));

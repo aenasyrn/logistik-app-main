@@ -37,6 +37,23 @@ export const hitungSisaBulan = (tanggalSelesai) => {
 };
 
 /**
+ * Hitung selisih hari dari hari ini ke tanggal selesai.
+ * Nilai positif = masih ada sisa, negatif = sudah lewat.
+ * @param {string} tanggalSelesai — ISO date string
+ * @returns {number|null}
+ */
+export const hitungSisaHari = (tanggalSelesai) => {
+  if (!tanggalSelesai) return null;
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const tglSelesai = new Date(tanggalSelesai);
+  tglSelesai.setHours(0, 0, 0, 0);
+  if (isNaN(tglSelesai)) return null;
+  const diffTime = tglSelesai.getTime() - hariIni.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+/**
  * Hitung status otomatis berdasarkan rentang tanggal sewa.
  * @param {string} startDate — ISO date string
  * @param {string} endDate   — ISO date string
@@ -80,6 +97,55 @@ export const parseIndoDateToISO = (dateStr) => {
 };
 
 /**
+ * Robust date parsing supporting YYYY-MM-DD (including swapped MM-DD), DD/MM/YYYY, and Month-Year strings.
+ * @param {string} dateStr
+ * @returns {string|null}
+ */
+export const parseRobustDate = (dateStr) => {
+  if (!dateStr) return null;
+  const cleanStr = dateStr.trim();
+  
+  // 1. If matches YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+    const [y, m, d] = cleanStr.split("-").map(Number);
+    if (m > 12) {
+      // Swapped month and day! (e.g. 2020-15-04 -> 2020-04-15)
+      return `${y}-${String(d).padStart(2, "0")}-${String(m).padStart(2, "0")}`;
+    }
+    return cleanStr;
+  }
+  
+  // 2. If matches DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY
+  const match = cleanStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (match) {
+    const part1 = Number(match[1]);
+    const part2 = Number(match[2]);
+    const y = match[3];
+    
+    let d = part1;
+    let m = part2;
+    if (part1 > 12) {
+      d = part1;
+      m = part2;
+    } else if (part2 > 12) {
+      d = part2;
+      m = part1;
+    } else {
+      // Default to DD-MM-YYYY (Indonesian standard)
+      d = part1;
+      m = part2;
+    }
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  // 3. Fallback to Indo Month Name
+  const parsedIndo = parseIndoDateToISO(cleanStr);
+  if (parsedIndo) return parsedIndo;
+
+  return null;
+};
+
+/**
  * Kembalikan class Tailwind untuk badge status perangkat.
  * @param {"Inventaris"|"Sewa Berjalan"|"Sewa Habis"|string} status
  * @returns {string}
@@ -98,7 +164,7 @@ export const emptyFormKomputer = {
   idOutlet: "", outlet: "", ipAddress: "", produk: "", sn: "",
   penyedia: "", tanggalMulai: "", tanggalSelesai: "",
   status: "Inventaris", kondisi: "BAIK",
-  deskripsi: "", macAddress: "", ram: "", storage: "", cpu: "", os: "",
+  keterangan: "", macAddress: "", ram: "", storage: "", cpu: "", os: "",
 };
 
 /** Nilai awal formData kosong untuk Printer. */

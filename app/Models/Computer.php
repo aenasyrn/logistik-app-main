@@ -23,7 +23,7 @@ class Computer extends Model
         'penyedia',
         'status',
         'kondisi',
-        'deskripsi',
+        'keterangan',
     ];
 
     public function outlet_rel(): BelongsTo

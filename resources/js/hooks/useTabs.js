@@ -1,7 +1,3 @@
-// src/hooks/useTabs.js
-// Buka, tutup, switch tab
-"use client";
-
 import { useState } from "react";
 import { INITIAL_TABS, VIEW_TITLES } from "../constants/tabConfig";
 

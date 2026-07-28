@@ -9,6 +9,557 @@
   --color-foreground: var(--foreground);
 }
 
+/* Print media overrides relocated to bottom of file */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Custom Forest Dark Green Theme overrides */
+.dark {
+  --background: #0f1712;
+  --foreground: #f1f5f3;
+}
+
+.dark body {
+  background-color: #0f1712 !important;
+  color: #f1f5f3 !important;
+}
+
+/* Card components */
+.dark .bg-white {
+  background-color: #1a2b20 !important;
+  border-color: #2b4533 !important;
+  color: #f1f5f3 !important;
+}
+
+/* Borders */
+.dark .border-gray-200,
+.dark .border-slate-200,
+.dark .border-slate-250,
+.dark .border-slate-200\/80,
+.dark .border-slate-100 {
+  border-color: #2b4533 !important;
+}
+
+/* Text primary & secondary */
+.dark .text-gray-900,
+.dark .text-slate-900,
+.dark .text-gray-800,
+.dark .text-slate-800 {
+  color: #f1f5f3 !important;
+}
+
+.dark .text-gray-700,
+.dark .text-slate-700,
+.dark .text-gray-600,
+.dark .text-slate-600 {
+  color: #a4b4a9 !important;
+}
+
+.dark .text-gray-500,
+.dark .text-slate-500,
+.dark .text-gray-400,
+.dark .text-slate-400 {
+  color: #86988c !important;
+}
+
+/* Input elements */
+.dark input[type="text"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark select,
+.dark textarea {
+  background-color: #0f1712 !important;
+  border-color: #2b4533 !important;
+  color: #f1f5f3 !important;
+}
+
+.dark input::placeholder {
+  color: #556c5e !important;
+}
+
+/* Tables */
+.dark thead tr,
+.dark thead th {
+  background-color: #243e2e !important;
+  color: #f1f5f3 !important;
+  border-color: #34553f !important;
+}
+
+.dark tbody tr {
+  background-color: #1a2b20 !important;
+}
+
+.dark tbody tr:nth-child(even) {
+  background-color: #213527 !important;
+}
+
+.dark tbody tr:hover,
+.dark tbody tr:hover td {
+  background-color: #273f2f !important;
+}
+
+.dark tbody td {
+  border-color: #2b4533 !important;
+  color: #d1dcd4 !important;
+}
+
+/* Custom scrollbars */
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: #0f1712 !important;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2b4533 !important;
+}
+
+/* Toolbar & details panels background */
+.dark .bg-slate-50\/30,
+.dark .bg-gray-50\/50,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-100 {
+  background-color: #1e3125 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #0f1712 !important;
+}
+
+/* Modals header/footer dark mode background */
+.dark .bg-white .bg-gray-50,
+.dark .bg-white .bg-gray-50\/50,
+.dark .bg-white .bg-gray-50\/30,
+.dark .bg-white .border-b.border-gray-100,
+.dark .bg-white .border-t.border-gray-100 {
+  background-color: #1e3125 !important;
+  border-color: #2b4533 !important;
+}
+
+
+/* Override default blue buttons to Figma Green in dark mode */
+.dark .bg-blue-600 {
+  background-color: #48a359 !important;
+  color: #ffffff !important;
+}
+.dark .hover\:bg-blue-700:hover,
+.dark .bg-blue-600:hover {
+  background-color: #3e8c4c !important;
+}
+
+.dark .text-blue-600,
+.dark .text-blue-700 {
+  color: #48a359 !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: #1f3526 !important;
+  color: #48a359 !important;
+  border-color: #273f2f !important;
+}
+
+.dark .border-blue-200 {
+  border-color: #273f2f !important;
+}
+
+@keyframes alert-glow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 4px rgba(220, 38, 38, 0.2) !important;
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 0 8px rgba(239, 68, 68, 0.4) !important;
+  }
+}
+
+/* Custom Alert/Warning Card & Table overrides (Maroon & Dark Red theme) */
+.dark .alert-card {
+  background-color: #800000 !important;
+  border: 2px solid #dc2626 !important;
+  animation: alert-glow 2s infinite ease-in-out !important;
+  color: #ffffff !important;
+}
+
+.dark .alert-card-header {
+  border-color: #991b1b !important;
+}
+
+/* Icon Container inside card header */
+.dark .alert-card .rounded-full {
+  background-color: #000000 !important;
+}
+
+.dark .alert-card .rounded-full svg {
+  color: #ffffff !important;
+}
+
+/* Title and description text color */
+.dark .alert-card h3 {
+  color: #ffffff !important;
+}
+
+.dark .alert-card p {
+  color: #fca5a5 !important;
+}
+
+/* Kelola Button */
+.dark .alert-card-header button,
+.dark .alert-card-header a {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+}
+
+.dark .alert-card-header button:hover,
+.dark .alert-card-header a:hover {
+  background-color: #1f1f1f !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+.dark .alert-card-footer {
+  background-color: #660000 !important;
+  border-color: #991b1b !important;
+  color: #fca5a5 !important;
+}
+
+.dark .alert-card-footer:hover {
+  background-color: #7f0000 !important;
+}
+
+.dark .alert-table {
+  border-color: #380d0d !important;
+}
+
+.dark .alert-table thead tr,
+.dark .alert-table thead th {
+  background-color: #fca5a5 !important;
+  color: #7f0000 !important;
+  border-color: #380d0d !important;
+}
+
+.dark .alert-table tbody tr {
+  background-color: #800000 !important;
+}
+
+.dark .alert-table tbody tr:nth-child(even) {
+  background-color: #800000 !important;
+}
+
+.dark .alert-table tbody tr:hover {
+  background-color: #990000 !important;
+}
+
+.dark .alert-table tbody td {
+  border-color: #380d0d !important;
+}
+
+/* Sisa Waktu Badge */
+.dark .alert-table td span,
+.dark .alert-table td .inline-flex {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Prevent dark mode style overrides inside Handover print preview area */
+.dark #printable-area {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+.dark #printable-area .border-transparent {
+  border-color: transparent !important;
+}
+
+/* Force light mode text colors specifically to match Tailwind classes on handover preview */
+.dark #printable-area .text-gray-950,
+.dark #printable-area .text-slate-950 {
+  color: #030712 !important;
+}
+.dark #printable-area .text-gray-900,
+.dark #printable-area .text-slate-900 {
+  color: #111827 !important;
+}
+.dark #printable-area .text-gray-800,
+.dark #printable-area .text-slate-800 {
+  color: #1f2937 !important;
+}
+.dark #printable-area .text-gray-750 {
+  color: #2b3641 !important;
+}
+.dark #printable-area .text-gray-700,
+.dark #printable-area .text-slate-700 {
+  color: #374151 !important;
+}
+.dark #printable-area .text-gray-600,
+.dark #printable-area .text-slate-600 {
+  color: #4b5563 !important;
+}
+.dark #printable-area .text-gray-500,
+.dark #printable-area .text-slate-500 {
+  color: #6b7280 !important;
+}
+.dark #printable-area .text-gray-400,
+.dark #printable-area .text-slate-400 {
+  color: #9ca3af !important;
+}
+
+/* Specific elements inside handover preview */
+.dark #printable-area table {
+  background-color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+.dark #printable-area th {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #000000 !important;
+}
+
+.dark #printable-area td {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-color: #000000 !important;
+}
+
+.dark #printable-area tr {
+  background-color: #ffffff !important;
+}
+
+.dark #printable-area tr:hover,
+.dark #printable-area tr:hover td {
+  background-color: #f9fafb !important;
+}
+
+.dark #printable-area .border-black {
+  border-color: #000000 !important;
+}
+
+.dark #printable-area .border-gray-300 {
+  border-color: #d1d5db !important;
+}
+
+.dark #printable-area .border-gray-250 {
+  border-color: #e5e7eb !important;
+}
+
+.dark #printable-area .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+.dark #printable-area .bg-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+.dark #printable-area .bg-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+/* Prevent dark mode style overrides inside SPK print preview area */
+.dark [id^="spk-print-area"] {
+  background-color: transparent;
+}
+
+.dark [id^="spk-print-area"] .border-transparent,
+.dark [id^="sopp-print-area"] .border-transparent {
+  border-color: transparent !important;
+}
+
+/* Force light mode text colors specifically to match Tailwind classes on preview */
+.dark [id^="spk-print-area"] .text-gray-950,
+.dark [id^="spk-print-area"] .text-slate-950,
+.dark [id^="sopp-print-area"] .text-gray-950,
+.dark [id^="sopp-print-area"] .text-slate-950 {
+  color: #030712 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-900,
+.dark [id^="spk-print-area"] .text-slate-900,
+.dark [id^="sopp-print-area"] .text-gray-900,
+.dark [id^="sopp-print-area"] .text-slate-900 {
+  color: #111827 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-800,
+.dark [id^="spk-print-area"] .text-slate-800,
+.dark [id^="sopp-print-area"] .text-gray-800,
+.dark [id^="sopp-print-area"] .text-slate-800 {
+  color: #1f2937 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-750,
+.dark [id^="sopp-print-area"] .text-gray-750 {
+  color: #2b3641 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-700,
+.dark [id^="spk-print-area"] .text-slate-700,
+.dark [id^="sopp-print-area"] .text-gray-700,
+.dark [id^="sopp-print-area"] .text-slate-700 {
+  color: #374151 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-600,
+.dark [id^="spk-print-area"] .text-slate-600,
+.dark [id^="sopp-print-area"] .text-gray-600,
+.dark [id^="sopp-print-area"] .text-slate-600 {
+  color: #4b5563 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-500,
+.dark [id^="spk-print-area"] .text-slate-500,
+.dark [id^="sopp-print-area"] .text-gray-500,
+.dark [id^="sopp-print-area"] .text-slate-500 {
+  color: #6b7280 !important;
+}
+.dark [id^="spk-print-area"] .text-gray-400,
+.dark [id^="spk-print-area"] .text-slate-400,
+.dark [id^="sopp-print-area"] .text-gray-400,
+.dark [id^="sopp-print-area"] .text-slate-400 {
+  color: #9ca3af !important;
+}
+
+/* Specific elements inside preview */
+.dark [id^="spk-print-area"] .spk-paper,
+.dark [id^="sopp-print-area"] {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.dark [id^="spk-print-area"] table,
+.dark [id^="sopp-print-area"] table {
+  background-color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+.dark [id^="spk-print-area"] th {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #000000 !important;
+}
+
+.dark [id^="sopp-print-area"] th {
+  background-color: inherit !important;
+  color: #111827 !important;
+  border-color: #000000 !important;
+}
+
+.dark #sopp-print-area-pengadaan thead tr,
+.dark #sopp-print-area-pengadaan thead th,
+.dark #sopp-print-area thead tr,
+.dark #sopp-print-area thead th {
+  background-color: #90c5e3 !important;
+}
+
+.dark #sopp-print-area-sewa thead tr,
+.dark #sopp-print-area-sewa thead th {
+  background-color: #92d050 !important;
+}
+
+.dark [id^="spk-print-area"] td,
+.dark [id^="sopp-print-area"] td {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-color: #000000 !important;
+}
+
+.dark [id^="spk-print-area"] tbody tr,
+.dark [id^="sopp-print-area"] tbody tr {
+  background-color: #ffffff !important;
+}
+
+.dark [id^="spk-print-area"] tbody tr:hover,
+.dark [id^="spk-print-area"] tbody tr:hover td,
+.dark [id^="sopp-print-area"] tbody tr:hover,
+.dark [id^="sopp-print-area"] tbody tr:hover td {
+  background-color: #f9fafb !important;
+}
+
+.dark [id^="spk-print-area"] .border-black,
+.dark [id^="sopp-print-area"] .border-black {
+  border-color: #000000 !important;
+}
+
+.dark [id^="spk-print-area"] .border-gray-300,
+.dark [id^="sopp-print-area"] .border-gray-300 {
+  border-color: #d1d5db !important;
+}
+
+.dark [id^="spk-print-area"] .border-gray-200,
+.dark [id^="sopp-print-area"] .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+.dark [id^="spk-print-area"] .bg-gray-50,
+.dark [id^="sopp-print-area"] .bg-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+.dark [id^="spk-print-area"] .bg-gray-100,
+.dark [id^="sopp-print-area"] .bg-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+.dark [id^="spk-print-area"] span[contenteditable="true"],
+.dark [id^="sopp-print-area"] span[contenteditable="true"] {
+  color: #111827 !important;
+}
+
+.dark [id^="spk-print-area"] span[contenteditable="true"]:hover,
+.dark [id^="sopp-print-area"] span[contenteditable="true"]:hover {
+  background-color: rgba(243, 244, 246, 0.8) !important;
+}
+
+.dark [id^="spk-print-area"] span[contenteditable="true"]:focus,
+.dark [id^="sopp-print-area"] span[contenteditable="true"]:focus {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Invert calendar picker native icons in dark mode */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) !important;
+  cursor: pointer;
+}
+
+/* Scrollbars in dark mode */
+.dark::-webkit-scrollbar,
+.dark *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark::-webkit-scrollbar-track,
+.dark *::-webkit-scrollbar-track {
+  background: #0f1712 !important;
+}
+
+.dark::-webkit-scrollbar-thumb,
+.dark *::-webkit-scrollbar-thumb {
+  background-color: #2b4533 !important;
+  border-radius: 6px !important;
+  border: 2px solid #0f1712 !important;
+}
+
+.dark::-webkit-scrollbar-thumb:hover,
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: #3e664c !important;
+}
+
+.dark,
+.dark * {
+  scrollbar-width: thin;
+  scrollbar-color: #2b4533 #0f1712;
+}
+
+/* Force dark-mode placeholder text to a consistent sage green/light gray color */
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #a4b4a9 !important;
+}
+
+/* Flexible Syarat List Item page breaking */
+.syarat-list-item {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
@@ -17,12 +568,14 @@
   
   @page {
     size: A4;
-    margin: 10mm 15mm;
+    margin-top: 60px;    /* Sesuaikan agar tidak menabrak header di halaman baru */
+    margin-bottom: 80px; /* Sesuaikan agar tidak menabrak footer di halaman lama */
   }
 
-  body {
-    background: var(--background);
-    color: var(--foreground);
+  html, body, .dark, .dark body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
   }
 
   #printable-area {
@@ -31,9 +584,95 @@
     page-break-after: avoid;
     page-break-before: avoid;
   }
+
+  /* Scoped print styles for handover document to prevent collision */
+  body.print-handover-only * {
+    visibility: hidden;
+  }
+  body.print-handover-only #preview {
+    display: block !important;
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+  body.print-handover-only #printable-area,
+  body.print-handover-only #printable-area * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+  body.print-handover-only #printable-area {
+    width: 100% !important;
+    height: auto !important;
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+  }
+  body.print-handover-only #print-footer,
+  body.print-handover-only #print-footer * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+  body.print-handover-only #dashboard,
+  body.print-handover-only #notifikasi,
+  body.print-handover-only #riwayat,
+  body.print-handover-only #master_barang,
+  body.print-handover-only #master_outlet,
+  body.print-handover-only #form,
+  body.print-handover-only #perangkat_printer,
+  body.print-handover-only #perangkat_komputer,
+  body.print-handover-only #kelola_user,
+  body.print-handover-only #log_aktivitas,
+  body.print-handover-only #bangunan_tanah,
+  body.print-handover-only #bangunan_sewa,
+  body.print-handover-only #bangunan_renovasi,
+  body.print-handover-only #bangunan_sarana,
+  body.print-handover-only #bangunan_spk,
+  body.print-handover-only #sopp_pengadaan,
+  body.print-handover-only #sopp_sewa {
+    display: none !important;
+  }
+  body.print-handover-only #printable-area .print\:bg-yellow-300 {
+    background-color: #fde047 !important;
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+@media screen {
+  /* Force container visibility off-screen during print measurement phase when triggered from background tabs */
+  body[class*="print-spk-"] #spk_renovasi,
+  body[class*="print-spk-"] #spk_elektronik,
+  body[class*="print-spk-"] #spk_kendaraan,
+  body[class*="print-sopp-"] #sopp_pengadaan,
+  body[class*="print-sopp-"] #sopp_sewa {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+    z-index: -9999 !important;
+  }
 }
+
+/* Sidebar Nav Inactive Link and Section Header Text Colors in Dark Mode */
+.dark aside nav button:not(:hover):not(.bg-blue-50):not(.bg-blue-100):not(.bg-purple-100):not(.bg-green-100):not(.bg-red-50):not(.bg-orange-50),
+.dark aside nav a:not(:hover):not(.bg-blue-50):not(.bg-blue-100),
+.dark aside nav span:not(:hover):not(.bg-blue-50):not(.bg-blue-100):not(.bg-purple-100):not(.bg-green-100):not(.bg-red-50):not(.bg-orange-50),
+.dark aside nav .text-gray-400:not(:hover):not(.bg-blue-50):not(.bg-blue-100):not(.bg-purple-100):not(.bg-green-100):not(.bg-red-50):not(.bg-orange-50),
+.dark aside nav .text-gray-500:not(:hover):not(.bg-blue-50):not(.bg-blue-100):not(.bg-purple-100):not(.bg-green-100):not(.bg-red-50):not(.bg-orange-50),
+.dark aside nav .text-gray-600:not(:hover):not(.bg-blue-50):not(.bg-blue-100):not(.bg-purple-100):not(.bg-green-100):not(.bg-red-50):not(.bg-orange-50) {
+  color: #ffffff !important;
+}
+
+/* Inactive dashboard tab buttons text colors in dark mode */
+.dark button.border-transparent.text-gray-500,
+.dark button.border-transparent.text-gray-500:hover {
+  color: #ffffff !important;
+}
+
+/* Dark blue text colors in dark mode override to white */
+.dark .text-blue-800,
+.dark .text-blue-900,
+.dark .text-blue-950 {
+  color: #ffffff !important;
+}
+
+
+

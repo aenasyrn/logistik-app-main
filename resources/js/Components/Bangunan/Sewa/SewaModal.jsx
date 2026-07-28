@@ -202,8 +202,8 @@ export default function SewaModal({
               </div>
             </div>
 
-            {/* Grid 5: Tanggal Sewa */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Grid 5: Tanggal Sewa & Status */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Kontrak Mulai *</label>
                 <input
@@ -225,6 +225,19 @@ export default function SewaModal({
                   disabled={isSaving}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Status Kontrak</label>
+                <select
+                  value={formData.status || "Aktif"}
+                  onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
+                  disabled={isSaving}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Selesai">Selesai</option>
+                  <option value="Sewa Habis">Sewa Habis</option>
+                </select>
               </div>
             </div>
 
@@ -316,7 +329,7 @@ export default function SewaModal({
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors text-sm disabled:opacity-50"
+              className="px-5 py-2.5 text-gray-600 dark:text-[#a4b4a9] hover:bg-gray-100 dark:hover:bg-[#243e2e] dark:hover:text-white rounded-xl font-medium transition-colors text-sm disabled:opacity-50"
             >
               Batal
             </button>

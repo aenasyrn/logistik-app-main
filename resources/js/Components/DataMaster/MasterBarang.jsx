@@ -1,12 +1,16 @@
 // resources/js/Components/DataMaster/MasterBarang.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Database, Plus, Box, Hash, Scale, Building2,
-  CalendarDays, Clock, Search, Edit, Trash2
+  CalendarDays, Clock, Search, Edit, Trash2,
+  FileSpreadsheet, Upload, Loader2, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { router } from "@inertiajs/react";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
+import { importInventoryCSV, downloadTemplate } from "../../services/inventoryService";
 import BarangFormModal    from "./BarangFormModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
 import ToastNotif         from "../Modal/ToastNotif";
@@ -22,6 +26,73 @@ export default function MasterBarang({ inventory, userRole }) {
   const [notif, setNotif]                       = useState({ show: false, message: "", type: "success" });
   const [selectedId, setSelectedId]             = useState(null);
   const [hoveredId, setHoveredId]               = useState(null);
+
+  const fileInputRef = useRef(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [filterStatus, setFilterStatus] = useState("Semua");
+
+  // Sync state if query param from Inertia has status
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const statusParam = urlParams.get("status") || "Semua";
+    setFilterStatus(statusParam);
+  }, []);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsSaving(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async ({ data }) => {
+        try {
+          const total = await importInventoryCSV("logistikku_app_01", data);
+          showNotif(`Sukses! ${total} data barang berhasil di-import.`, "success");
+        } catch (err) {
+          console.error(err);
+          const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan kolom header persis seperti template.";
+          showNotif(errorMsg, "error");
+        } finally {
+          setIsSaving(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      },
+      error: (err) => {
+        console.error(err);
+        showNotif("Gagal membaca file CSV.", "error");
+        setIsSaving(false);
+      },
+    });
+  };
+
+  const exportToExcel = () => {
+    const rows = filteredInventory.map((item, index) => ({
+      "No": index + 1,
+      "Nama Barang": item.nama || "",
+      "Stok": item.kuantitas !== undefined ? item.kuantitas : (item.stok || 0),
+      "Satuan": item.satuan || "",
+      "Vendor": item.vendor_nama || "",
+      "No SPK": item.no_spk || "",
+      "No PKS": item.no_pks || "",
+      "Tgl Mulai": item.tanggal_mulai || "",
+      "Tgl Selesai": item.tanggal_selesai || "",
+      "Masa Sewa (Bulan)": item.masa_sewa_bulan || 0,
+      "Status": getStatusInfo(item) || "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data Barang");
+    const colWidths = Object.keys(rows[0] || {}).map((key) => ({
+      wch: Math.max(key.length, ...rows.map((r) => String(r[key]).length)) + 2,
+    }));
+    ws["!cols"] = colWidths;
+    XLSX.writeFile(wb, `Data_Barang_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   useEffect(() => { setLocalInventory(inventory || []); }, [inventory]);
 
@@ -74,17 +145,36 @@ export default function MasterBarang({ inventory, userRole }) {
     }
   };
 
-  const filteredInventory = localInventory.filter((inv) => {
-    const q = searchQuery.toLowerCase();
-    const statusVal = getStatusInfo(inv);
-    return (
-      inv.nama?.toLowerCase().includes(q) ||
-      inv.vendor_nama?.toLowerCase().includes(q) ||
-      inv.no_spk?.toLowerCase().includes(q) ||
-      statusVal.toLowerCase().includes(q) ||
-      inv.deskripsi?.toLowerCase().includes(q)
-    );
-  });
+  const filteredInventory = localInventory
+    .filter((inv) => {
+      const q = searchQuery.toLowerCase();
+      const statusVal = getStatusInfo(inv);
+      
+      const matchSearch =
+        inv.nama?.toLowerCase().includes(q) ||
+        inv.vendor_nama?.toLowerCase().includes(q) ||
+        inv.no_spk?.toLowerCase().includes(q) ||
+        statusVal.toLowerCase().includes(q) ||
+        inv.deskripsi?.toLowerCase().includes(q);
+
+      const matchStatus =
+        filterStatus === "Semua" || statusVal === filterStatus;
+
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+  const handleFilterStatus = (e) => {
+    const val = e.target.value;
+    setFilterStatus(val);
+    setCurrentPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilterStatus("Semua");
+    setCurrentPage(1);
+  };
 
   const openAdd   = () => { setEditingInv(null); setCalculatedStatus("Inventaris"); setIsModalOpen(true); };
   const openEdit  = (inv) => { setEditingInv(inv); setCalculatedStatus(getStatusInfo(inv)); setIsModalOpen(true); };
@@ -155,38 +245,174 @@ export default function MasterBarang({ inventory, userRole }) {
       });
     }
   };
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedInventory = filteredInventory.slice(startIndex, startIndex + itemsPerPage);
+
+  const getVisiblePages = () => {
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      return [...Array(totalPages)].map((_, i) => i + 1);
+    }
+    let start = currentPage - 2;
+    let end = currentPage + 2;
+    if (start < 1) {
+      start = 1;
+      end = maxVisible;
+    } else if (end > totalPages) {
+      end = totalPages;
+      start = totalPages - maxVisible + 1;
+    }
+    const pages = [];
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in zoom-in-95 duration-300 relative">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-300 relative">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
+            <Database className="w-6 h-6 text-blue-600" /> Master Data Barang
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Kelola ketersediaan stok, status sewa, dan durasi kontrak barang.
+          </p>
+        </div>
 
-        {/* Toolbar */}
-        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col lg:flex-row justify-between items-center gap-4">
-          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <Database className="w-5 h-5 text-blue-600" /> Ketersediaan Stok Barang
-          </h3>
-          <div className="flex flex-wrap w-full lg:w-auto gap-3 items-center">
-            <div className="relative w-full sm:w-72">
-              <Search className="h-4 w-4 text-gray-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="Cari barang atau status..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="bg-blue-50 text-blue-700 px-5 py-2.5 rounded-xl text-sm font-semibold shrink-0">
-              Total: {filteredInventory.length}
-            </div>
-            {userRole === "admin" && (
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={exportToExcel}
+            disabled={filteredInventory.length === 0}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Export Excel
+          </button>
+          {userRole === "admin" && (
+            <>
               <button
-                onClick={openAdd}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-sm transition-colors flex items-center gap-2 shrink-0"
+                type="button"
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
               >
-                <Plus className="w-4 h-4" /> Tambah Barang
+                <FileSpreadsheet className="w-4 h-4" /> Template CSV
               </button>
-            )}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSaving}
+                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Import CSV
+              </button>
+
+              <input
+                type="file"
+                accept=".csv"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+                aria-label="Upload file CSV data barang"
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Toolbar */}
+        <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/30 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              <div className="relative w-full sm:w-80">
+                <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  placeholder="Cari barang atau status..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Show Entries Dropdown */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 self-start sm:self-auto">
+                <span>Show</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={10000}>All</option>
+                </select>
+                <span>entries</span>
+              </div>
+
+              {/* Reset Filters button if any filter active */}
+              {(filterStatus !== "Semua" || searchQuery !== "") && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 self-start sm:self-auto"
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+              {userRole === "admin" && (
+                <button
+                  onClick={openAdd}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Barang
+                </button>
+              )}
+              <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                Total: {filteredInventory.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Filter Status */}
+          <div className="flex flex-col items-start pt-2 border-t border-slate-100/50">
+            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wider uppercase mb-1.5">
+              STATUS
+            </span>
+            <div className="relative w-full max-w-xs">
+              <select
+                value={filterStatus}
+                onChange={handleFilterStatus}
+                aria-label="Filter status"
+                className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+              >
+                <option value="Semua">Semua Status</option>
+                <option value="Inventaris">Inventaris</option>
+                <option value="Sewa Berjalan">Sewa Berjalan</option>
+                <option value="Sewa Habis">Sewa Habis</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -209,19 +435,20 @@ export default function MasterBarang({ inventory, userRole }) {
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-800 bg-white">
-                {filteredInventory.length === 0 ? (
+                {paginatedInventory.length === 0 ? (
                   <tr>
                     <td colSpan={userRole === "admin" ? "10" : "9"} className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
                       Tidak ada data barang ditemukan.
                     </td>
                   </tr>
                 ) : (
-                  filteredInventory.map((inv, index) => {
+                  paginatedInventory.map((inv, index) => {
                     const statusVal = getStatusInfo(inv);
                     const stokVal = inv.kuantitas !== undefined ? inv.kuantitas : (inv.stok || 0);
                     const isEven = index % 2 !== 0;
                     const isSelected = selectedId === inv.id;
                     const isHovered = hoveredId === inv.id;
+                    const globalIndex = startIndex + index + 1;
 
                     let bgClass = "";
                     if (isSelected) {
@@ -240,7 +467,7 @@ export default function MasterBarang({ inventory, userRole }) {
                         onClick={() => setSelectedId((prev) => (prev === inv.id ? null : inv.id))}
                         className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                       >
-                        <td className="p-2 border border-slate-200 text-center align-middle font-medium text-gray-500">{index + 1}</td>
+                        <td className="p-2 border border-slate-200 text-center align-middle font-medium text-gray-500">{globalIndex}</td>
                         <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">
                           <div className="relative group cursor-default">
                             {inv.nama}
@@ -292,6 +519,43 @@ export default function MasterBarang({ inventory, userRole }) {
             </table>
           </div>
         </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/30">
+            <span className="text-xs text-gray-500">
+              Menampilkan {startIndex + 1} sampai {Math.min(startIndex + itemsPerPage, filteredInventory.length)} dari {filteredInventory.length} data
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                &lt; Prev
+              </button>
+              {getVisiblePages().map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${currentPage === page
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+                    }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Next &gt;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Modal Form ── */}

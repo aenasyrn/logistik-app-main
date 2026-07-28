@@ -6,7 +6,7 @@ import {
   Loader2, Network, Cpu, HardDrive, AlertTriangle,
   QrCode, Edit, Trash2, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { formatBulanTahun, hitungSisaBulan, getStatusBadge } from "../../../utils/deviceUtils";
+import { formatBulanTahun, hitungSisaBulan, hitungSisaHari, getStatusBadge } from "../../../utils/deviceUtils";
 
 export default function KomputerTable({
   isLoading, paginatedData, filteredData, userRole,
@@ -15,6 +15,27 @@ export default function KomputerTable({
 }) {
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
+
+  const getVisiblePages = () => {
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      return [...Array(totalPages)].map((_, i) => i + 1);
+    }
+    let start = currentPage - 2;
+    let end = currentPage + 2;
+    if (start < 1) {
+      start = 1;
+      end = maxVisible;
+    } else if (end > totalPages) {
+      end = totalPages;
+      start = totalPages - maxVisible + 1;
+    }
+    const pages = [];
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <div className="flex flex-col">
@@ -54,6 +75,7 @@ export default function KomputerTable({
               paginatedData.map((comp, index) => {
                 const globalIndex = startIndex + index + 1;
                 const sisaBulan      = hitungSisaBulan(comp.tanggalSelesai);
+                const sisaHari       = hitungSisaHari(comp.tanggalSelesai);
                 const isExpiringSoon =
                   comp.status === "Sewa Berjalan" &&
                   sisaBulan !== null && sisaBulan <= 3 && sisaBulan >= 0;
@@ -140,13 +162,20 @@ export default function KomputerTable({
                         {comp.tanggalMulai || comp.tanggalSelesai
                           ? `${formatBulanTahun(comp.tanggalMulai)} - ${formatBulanTahun(comp.tanggalSelesai)}`
                           : "-"}
-                        {isExpiringSoon && (
-                          <AlertTriangle className="w-3 h-3 text-orange-500 shrink-0" title="Segera Habis" />
+                        {(isExpiringSoon || isExpired) && (
+                          <AlertTriangle className={`w-3 h-3 shrink-0 ${isExpired ? "text-red-500" : "text-orange-500"}`} title={isExpired ? "Sewa Habis" : "Segera Habis"} />
                         )}
                       </div>
                       {isExpiringSoon && (
                         <p className="text-[10px] text-orange-600 font-bold mt-0.5 bg-orange-100/50 w-max px-1.5 py-0.5 rounded">
-                          Sisa {sisaBulan} bln
+                          {sisaBulan === 0 ? `Sisa ${sisaHari} hari` : `Sisa ${sisaBulan} bln`}
+                        </p>
+                      )}
+                      {isExpired && (
+                        <p className="text-[10px] text-red-600 font-bold mt-0.5 bg-red-100/60 w-max px-1.5 py-0.5 rounded border border-red-200">
+                          {sisaBulan === 0
+                            ? `Habis Masa Sewa ${sisaHari !== null ? Math.abs(sisaHari) : 0} hari`
+                            : `Habis Masa Sewa ${sisaBulan !== null ? Math.abs(sisaBulan) : 0} bln`}
                         </p>
                       )}
                     </td>
@@ -169,8 +198,8 @@ export default function KomputerTable({
                     
                     {/* Keterangan */}
                     <td className="p-2 border border-slate-200 align-middle">
-                      <p className="text-[10px] text-gray-500 truncate" title={comp.deskripsi}>
-                        {comp.deskripsi || "-"}
+                      <p className="text-[10px] text-gray-500 truncate" title={comp.keterangan}>
+                        {comp.keterangan || "-"}
                       </p>
                     </td>
 
@@ -204,30 +233,38 @@ export default function KomputerTable({
         </table>
       </div>
 
-      {/* Paginasi */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center justify-between">
-          <span className="text-xs text-gray-500 hidden sm:inline-block">
-            Menampilkan{" "}
-            <span className="font-bold text-gray-900">{startIndex + 1}</span>
-            {" - "}
-            <span className="font-bold text-gray-900">
-              {Math.min(startIndex + itemsPerPage, filteredData.length)}
-            </span>
-            {" dari "}
-            <span className="font-bold text-gray-900">{filteredData.length}</span> PC
+        <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/30">
+          <span className="text-xs text-gray-500">
+            Menampilkan {startIndex + 1} sampai {Math.min(startIndex + itemsPerPage, filteredData.length)} dari {filteredData.length} data
           </span>
-          <div className="flex gap-1.5 ml-auto">
-            <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}
-              className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-3.5 h-3.5 text-gray-600" />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              &lt; Prev
             </button>
-            <span className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 rounded-lg border border-gray-200">
-              Hal {currentPage} / {totalPages}
-            </span>
-            <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-              className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronRight className="w-3.5 h-3.5 text-gray-600" />
+            {getVisiblePages().map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${currentPage === page
+                  ? "bg-blue-600 border-blue-600 text-white"
+                  : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+                  }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              Next &gt;
             </button>
           </div>
         </div>

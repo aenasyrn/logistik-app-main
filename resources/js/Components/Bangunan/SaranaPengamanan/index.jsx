@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Shield, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Eye, Upload } from "lucide-react";
+import { Shield, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, FileText, Upload } from "lucide-react";
 import axios from "axios";
 import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
@@ -12,19 +12,51 @@ import ConfirmDeleteModal from "../../Modal/ConfirmDeleteModal";
 import ToastNotif from "../../Modal/ToastNotif";
 import { importSecurityCSV, downloadSecurityTemplate } from "../../../services/securityService";
 
-export default function SaranaPengamanan({ userRole, facilities = [] }) {
+export default function SaranaPengamanan({ userRole, facilities = [], securityFilter = "", setSecurityFilter }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Filter States
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterKanwil, setFilterKanwil] = useState("all");
-  const [filterAplikasi, setFilterAplikasi] = useState("all");
+  React.useEffect(() => {
+    if (securityFilter === "") {
+      setSearchQuery("");
+      setFilterArea("all");
+      setFilterCabang("all");
+      setFilterStatus("all");
+    } else if (securityFilter === "online") {
+      setFilterStatus("Online");
+      setCurrentPage(1);
+    } else if (securityFilter === "offline") {
+      setFilterStatus("Offline");
+      setCurrentPage(1);
+    }
+  }, [securityFilter]);
+
+  React.useEffect(() => {
+    const handleReset = () => {
+      setSearchQuery("");
+      setFilterArea("all");
+      setFilterCabang("all");
+      setFilterStatus("all");
+      setCurrentPage(1);
+    };
+    window.addEventListener("reset-all-filters", handleReset);
+    return () => window.removeEventListener("reset-all-filters", handleReset);
+  }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Row selection and hover states
+  const [selectedId, setSelectedId] = useState(null);
+  const [hoveredId, setHoveredId] = useState(null);
+
+  // Filter States
+  const [filterArea, setFilterArea] = useState("all");
+  const [filterCabang, setFilterCabang] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [localStatuses, setLocalStatuses] = useState({});
 
   const [formData, setFormData] = useState({
     no_urut: "",
@@ -34,46 +66,36 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
     kode_unit_kerja: "",
     nama_unit_kerja: "",
     status: "Online",
-    vendor: "",
+    vendor: "Teknisi CCTV Perorangan",
     jumlah_kamera: "",
-    aplikasi: "",
+    aplikasi: "Mobile APP",
     nama_aplikasi: "",
     keterangan: "",
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
-  const [detailData, setDetailData] = useState(null);
   const [notif, setNotif] = useState({ show: false, message: "", type: "success" });
-
-  const fileInputRef = useRef(null);
 
   const showNotif = (message, type = "success") => {
     setNotif({ show: true, message, type });
   };
 
-  // Generate dynamic filter options from database records
-  const kanwilOptions = Array.from(
+  // Dynamic filter options
+  const uniqueAreas = Array.from(new Set(facilities.map((f) => f.kantor_area).filter(Boolean))).sort();
+  const uniqueCabangs = Array.from(
     new Set(
       facilities
-        .map((f) => f.kantor_wilayah?.trim())
-        .filter((w) => !!w)
+        .filter((f) => filterArea === "all" || f.kantor_area === filterArea)
+        .map((f) => f.kantor_cabang)
+        .filter(Boolean)
     )
   ).sort();
 
-  const aplikasiOptions = Array.from(
-    new Set(
-      facilities
-        .map((f) => f.aplikasi?.trim())
-        .filter((a) => !!a)
-    )
-  ).sort();
-
-  // Filter logic
+  // Filter
   const filteredFacilities = facilities.filter((item) => {
     const q = searchQuery.toLowerCase();
-
-    // 1. Search Query filter
     const matchesSearch = !searchQuery || (
+      (item.no_urut && String(item.no_urut).toLowerCase().includes(q)) ||
       (item.kantor_wilayah && item.kantor_wilayah.toLowerCase().includes(q)) ||
       (item.kantor_area && item.kantor_area.toLowerCase().includes(q)) ||
       (item.kantor_cabang && item.kantor_cabang.toLowerCase().includes(q)) ||
@@ -81,30 +103,17 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       (item.nama_unit_kerja && item.nama_unit_kerja.toLowerCase().includes(q)) ||
       (item.status && item.status.toLowerCase().includes(q)) ||
       (item.vendor && item.vendor.toLowerCase().includes(q)) ||
+      (item.jumlah_kamera && String(item.jumlah_kamera).includes(q)) ||
       (item.aplikasi && item.aplikasi.toLowerCase().includes(q)) ||
       (item.nama_aplikasi && item.nama_aplikasi.toLowerCase().includes(q)) ||
       (item.keterangan && item.keterangan.toLowerCase().includes(q))
     );
 
-    if (!matchesSearch) return false;
+    const matchesArea = filterArea === "all" || item.kantor_area === filterArea;
+    const matchesCabang = filterCabang === "all" || item.kantor_cabang === filterCabang;
+    const matchesStatus = filterStatus === "all" || item.status === filterStatus;
 
-    // 2. Status filter
-    if (filterStatus !== "all") {
-      const s = (item.status || "").toLowerCase();
-      if (s !== filterStatus.toLowerCase()) return false;
-    }
-
-    // 3. Kanwil filter
-    if (filterKanwil !== "all") {
-      if ((item.kantor_wilayah || "").trim() !== filterKanwil) return false;
-    }
-
-    // 4. Aplikasi filter
-    if (filterAplikasi !== "all") {
-      if ((item.aplikasi || "").trim() !== filterAplikasi) return false;
-    }
-
-    return true;
+    return matchesSearch && matchesArea && matchesCabang && matchesStatus;
   });
 
   // Pagination
@@ -143,9 +152,9 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       kode_unit_kerja: "",
       nama_unit_kerja: "",
       status: "Online",
-      vendor: "",
+      vendor: "Teknisi CCTV Perorangan",
       jumlah_kamera: "",
-      aplikasi: "",
+      aplikasi: "Mobile APP",
       nama_aplikasi: "",
       keterangan: "",
     });
@@ -162,9 +171,9 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       kode_unit_kerja: item.kode_unit_kerja || "",
       nama_unit_kerja: item.nama_unit_kerja || "",
       status: item.status || "Online",
-      vendor: item.vendor || "",
-      jumlah_kamera: item.jumlah_kamera !== null && item.jumlah_kamera !== undefined ? String(item.jumlah_kamera) : "",
-      aplikasi: item.aplikasi || "",
+      vendor: item.vendor || "Teknisi CCTV Perorangan",
+      jumlah_kamera: item.jumlah_kamera || "",
+      aplikasi: item.aplikasi || "Mobile APP",
       nama_aplikasi: item.nama_aplikasi || "",
       keterangan: item.keterangan || "",
     });
@@ -175,22 +184,24 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
     setDeleteConfirm({ show: true, id, name: nama });
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     setIsSaving(true);
-    try {
-      await axios.delete(`/security-facilities/${deleteConfirm.id}`);
-      router.reload({ only: ["securityFacilities", "activityLogs"] });
-      showNotif("Data pengamanan & korporasi berhasil dihapus!");
-    } catch (e) {
-      console.error(e);
-      showNotif("Gagal menghapus data pengamanan & korporasi.", "error");
-    } finally {
-      setIsSaving(false);
-      setDeleteConfirm({ show: false, id: null, name: "" });
-    }
+    router.delete(`/security-facilities/${deleteConfirm.id}`, {
+      onSuccess: () => {
+        showNotif("Data pengamanan & korporasi berhasil dihapus!");
+        setDeleteConfirm({ show: false, id: null, name: "" });
+      },
+      onError: (err) => {
+        console.error(err);
+        showNotif("Gagal menghapus data pengamanan & korporasi.", "error");
+      },
+      onFinish: () => {
+        setIsSaving(false);
+      }
+    });
   };
 
-  const handleSave = async (e) => {
+  const handleSave = (e) => {
     e.preventDefault();
     setIsSaving(true);
 
@@ -203,35 +214,72 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       nama_unit_kerja: formData.nama_unit_kerja,
       status: formData.status,
       vendor: formData.vendor,
-      jumlah_kamera: formData.jumlah_kamera !== "" ? Number(formData.jumlah_kamera) : null,
+      jumlah_kamera: formData.jumlah_kamera ? Number(formData.jumlah_kamera) : null,
       aplikasi: formData.aplikasi,
       nama_aplikasi: formData.nama_aplikasi,
       keterangan: formData.keterangan,
     };
 
+    if (editingId) {
+      router.put(`/security-facilities/${editingId}`, payload, {
+        onSuccess: () => {
+          showNotif("Data pengamanan & korporasi berhasil diperbarui!");
+          setIsModalOpen(false);
+        },
+        onError: (err) => {
+          console.error(err);
+          showNotif("Gagal menyimpan data pengamanan & korporasi.", "error");
+        },
+        onFinish: () => {
+          setIsSaving(false);
+        }
+      });
+    } else {
+      router.post("/security-facilities", payload, {
+        onSuccess: () => {
+          showNotif("Data pengamanan & korporasi baru berhasil ditambahkan!");
+          setIsModalOpen(false);
+        },
+        onError: (err) => {
+          console.error(err);
+          showNotif("Gagal menyimpan data pengamanan & korporasi.", "error");
+        },
+        onFinish: () => {
+          setIsSaving(false);
+        }
+      });
+    }
+  };
+
+  const handleStatusChange = async (id, newStatus) => {
+    const oldStatus = localStatuses[id] !== undefined ? localStatuses[id] : (facilities.find(f => f.id === id)?.status || "Offline");
+
+    // Update UI immediately (optimistic update)
+    setLocalStatuses(prev => ({ ...prev, [id]: newStatus }));
+
     try {
-      if (editingId) {
-        await axios.put(`/security-facilities/${editingId}`, payload);
-        router.reload({ only: ["securityFacilities", "activityLogs"] });
-        showNotif("Data pengamanan & korporasi berhasil diperbarui!");
-      } else {
-        await axios.post("/security-facilities", payload);
-        router.reload({ only: ["securityFacilities", "activityLogs"] });
-        showNotif("Data pengamanan & korporasi baru berhasil ditambahkan!");
-      }
-      setIsModalOpen(false);
+      await axios.put(`/security-facilities/${id}/status`, { status: newStatus });
+      router.reload({
+        only: ["securityFacilities", "activityLogs"],
+        onSuccess: () => {
+          setLocalStatuses(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        }
+      });
     } catch (err) {
       console.error(err);
-      showNotif("Gagal menyimpan data pengamanan & korporasi.", "error");
-    } finally {
-      setIsSaving(false);
+      showNotif("Gagal mengubah status.", "error");
+      // Rollback to old status if server call fails
+      setLocalStatuses(prev => ({ ...prev, [id]: oldStatus }));
     }
   };
 
   const exportToExcel = () => {
-    const rows = filteredFacilities.map((item, idx) => ({
-      "No": idx + 1,
-      "No. Urut": item.no_urut || "",
+    const rows = filteredFacilities.map((item) => ({
+      "No.": item.no_urut || "",
       "Kantor Wilayah": item.kantor_wilayah || "",
       "Kantor Area": item.kantor_area || "",
       "Kantor Cabang": item.kantor_cabang || "",
@@ -239,7 +287,7 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
       "Nama Unit Kerja": item.nama_unit_kerja || "",
       "Status": item.status || "",
       "Vendor": item.vendor || "",
-      "Jumlah Kamera": item.jumlah_kamera || 0,
+      "Jumlah Kamera": item.jumlah_kamera || "",
       "Aplikasi": item.aplikasi || "",
       "Nama Aplikasi": item.nama_aplikasi || "",
       "Keterangan": item.keterangan || "",
@@ -248,12 +296,10 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Pengamanan dan Korporasi");
-    const colWidths = Object.keys(rows[0] || {}).map((key) => ({
-      wch: Math.max(key.length, ...rows.map((r) => String(r[key]).length)) + 2,
-    }));
-    ws["!cols"] = colWidths;
     XLSX.writeFile(wb, `Pengamanan_dan_Korporasi_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+
+  const fileInputRef = useRef(null);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -285,28 +331,28 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
   };
 
   const getStatusBadge = (status) => {
-    const s = (status || "").toLowerCase().trim();
-    if (s === "online" || s === "aktif") {
-      return "bg-green-50 text-green-700 border-green-200";
+    switch (status?.toLowerCase()) {
+      case "online":
+        return "bg-green-50 text-green-700 border-green-200";
+      case "offline":
+        return "bg-red-50 text-red-700 border-red-200";
+      default:
+        return "bg-gray-50 text-gray-600 border-gray-200";
     }
-    if (s === "offline" || s === "rusak") {
-      return "bg-red-50 text-red-700 border-red-200";
-    }
-    return "bg-slate-50 text-slate-700 border-slate-200";
   };
 
   return (
     <>
-      <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:p-0">
+      <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:hidden">
         
         {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 print:hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-              <Shield className="w-6 h-6 text-blue-900" /> Pengamanan dan Korporasi
+              <Shield className="w-6 h-6 text-indigo-500" /> Pengamanan dan Korporasi
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              Pantau ketersediaan CCTV, vendor, status online/offline, unit kerja, dan aplikasi pengamanan korporasi.
+              Pantau ketersediaan CCTV, sistem alarm, pagar pengamanan, pos satpam, dan perangkat keselamatan korporasi.
             </p>
           </div>
 
@@ -349,28 +395,20 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
           </div>
         </div>
 
-        {/* PRINT ONLY HEADER */}
-        <div className="hidden print:block mb-8 border-b-2 border-black pb-4">
-          <h1 className="text-2xl font-bold text-center">LAPORAN PENGAMANAN DAN KORPORASI</h1>
-          <p className="text-sm text-center text-gray-500 mt-1">
-            Dicetak pada tanggal: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        </div>
-
         {/* Tabel Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
-          {/* Search & Filters Toolbar */}
-          <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/30 flex flex-col gap-4 print:hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Search & Filter Toolbar */}
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
               <div className="flex flex-wrap items-center gap-3 flex-1">
                 <div className="relative w-full sm:w-80">
-                  <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3" />
+                  <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
                   <input
                     type="text"
-                    placeholder="Cari data pengamanan..."
+                    placeholder="Cari sarana keamanan..."
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
 
@@ -392,49 +430,86 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
                   </select>
                   <span>entries</span>
                 </div>
-                
-                {/* Reset Filters button */}
-                {(filterStatus !== "all" || filterKanwil !== "all" || filterAplikasi !== "all" || searchQuery !== "") && (
+
+                {/* Reset Filters button if any filter active */}
+                {(filterArea !== "all" || filterCabang !== "all" || filterStatus !== "all" || searchQuery !== "") && (
                   <button
                     type="button"
                     onClick={() => {
                       setSearchQuery("");
+                      setFilterArea("all");
+                      setFilterCabang("all");
                       setFilterStatus("all");
-                      setFilterKanwil("all");
-                      setFilterAplikasi("all");
                       setCurrentPage(1);
+                      if (setSecurityFilter) setSecurityFilter("");
                     }}
-                    className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0"
+                    className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 cursor-pointer"
                   >
                     Reset Filter
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center gap-3 self-start lg:self-auto shrink-0">
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
                 {userRole === "admin" && (
                   <button
                     type="button"
                     onClick={openAdd}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-xs"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Sarana
                   </button>
                 )}
-                <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-100 shrink-0">
+                <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0 max-w-fit">
                   Total Data: {filteredFacilities.length}
                 </div>
               </div>
             </div>
 
-            {/* Filter Dropdowns Grid */}
+            {/* Dropdown Filters Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Kantor Area Filter */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Kantor Area</label>
+                <select
+                  value={filterArea}
+                  onChange={(e) => { setFilterArea(e.target.value); setFilterCabang("all"); setCurrentPage(1); }}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
+                >
+                  <option value="all">Semua Kantor Area</option>
+                  {uniqueAreas.map((area) => (
+                    <option key={area} value={area}>{area}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Kantor Cabang Filter */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Kantor Cabang</label>
+                <select
+                  value={filterCabang}
+                  onChange={(e) => { setFilterCabang(e.target.value); setCurrentPage(1); }}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
+                >
+                  <option value="all">Semua Kantor Cabang</option>
+                  {uniqueCabangs.map((cabang) => (
+                    <option key={cabang} value={cabang}>{cabang}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Status Filter */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Status</label>
                 <select
                   value={filterStatus}
-                  onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                  onChange={(e) => {
+                    setFilterStatus(e.target.value);
+                    setCurrentPage(1);
+                    if (setSecurityFilter && securityFilter !== "") {
+                      setSecurityFilter("");
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
                 >
                   <option value="all">Semua Status</option>
@@ -442,43 +517,37 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
                   <option value="Offline">Offline</option>
                 </select>
               </div>
-
-              {/* Kantor Wilayah Filter */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Kantor Wilayah</label>
-                <select
-                  value={filterKanwil}
-                  onChange={(e) => { setFilterKanwil(e.target.value); setCurrentPage(1); }}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
-                >
-                  <option value="all">Semua Kanwil</option>
-                  {kanwilOptions.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Aplikasi Filter */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Aplikasi</label>
-                <select
-                  value={filterAplikasi}
-                  onChange={(e) => { setFilterAplikasi(e.target.value); setCurrentPage(1); }}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm"
-                >
-                  <option value="all">Semua Aplikasi</option>
-                  {aplikasiOptions.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
+
+          {securityFilter === "online" && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between text-sm text-green-800 animate-in fade-in duration-300">
+              <span className="font-medium">Menampilkan data CCTV Online.</span>
+              <button
+                onClick={() => setSecurityFilter("")}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {securityFilter === "offline" && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
+              <span className="font-medium">Menampilkan data CCTV Offline.</span>
+              <button
+                onClick={() => setSecurityFilter("")}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
 
           {/* Table */}
           <div className={`overflow-x-auto custom-scrollbar ${itemsPerPage > 20 ? "max-h-[60vh] overflow-y-auto" : ""}`}>
             <table className="w-full text-left border-collapse min-w-[1800px]">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
                   <th className="p-2.5 w-12 text-center align-middle border border-blue-800 bg-blue-900">No</th>
                   <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kantor Wilayah</th>
@@ -491,100 +560,98 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
                   <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Jumlah Kamera</th>
                   <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aplikasi</th>
                   <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Nama Aplikasi</th>
-                  <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Keterangan</th>
-                  <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>
+                  <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Keterangan (Jika Offline)</th>
+                  {userRole === "admin" && (
+                    <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-800 bg-white">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan="13" className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
-                      Tidak ada data pengamanan korporasi ditemukan.
+                    <td colSpan={userRole === "admin" ? "13" : "12"} className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
+                      Tidak ada data sarana pengamanan ditemukan.
                     </td>
                   </tr>
                 ) : (
                   paginatedData.map((item, index) => {
                     const globalIndex = startIndex + index + 1;
                     const isEven = index % 2 !== 0;
+                    const isSelected = selectedId === item.id;
+                    const isHovered = hoveredId === item.id;
+
+                    let bgClass = "";
+                    if (isSelected) {
+                      bgClass = isHovered 
+                        ? "bg-blue-200 text-blue-950 dark:bg-[#2e4c37] dark:text-[#f1f5f3]" 
+                        : "bg-blue-100 text-blue-900 dark:bg-[#1f3526] dark:text-[#48a359]";
+                    } else if (isHovered) {
+                      bgClass = "bg-slate-200 text-gray-900 dark:bg-[#273f2f] dark:text-[#f1f5f3]";
+                    } else {
+                      bgClass = isEven 
+                        ? "bg-slate-100 text-gray-800 dark:bg-[#213527] dark:text-[#d1dcd4]" 
+                        : "bg-white text-gray-800 dark:bg-[#1a2b20] dark:text-[#d1dcd4]";
+                    }
 
                     return (
                       <tr
                         key={item.id}
-                        className={`transition-colors duration-150 cursor-pointer hover:bg-slate-200/60 ${
-                          isEven ? "bg-slate-100/50" : "bg-white"
-                        }`}
-                        onClick={() => setDetailData(item)}
+                        onMouseEnter={() => setHoveredId(item.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                        onClick={() => setSelectedId((prev) => (prev === item.id ? null : item.id))}
+                        className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                       >
-                        <td className="p-2 border border-slate-200 text-center align-middle text-xs font-medium text-gray-500">
-                          {globalIndex}
+                        <td className="p-2 border border-slate-200 text-center align-middle text-xs font-medium">{globalIndex}</td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kantor_wilayah || "-"}</td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kantor_area || "-"}</td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kantor_cabang || "-"}</td>
+                        <td className="p-2 border border-slate-200 text-center align-middle text-xs font-mono text-gray-600">{item.kode_unit_kerja || "-"}</td>
+                        <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">{item.nama_unit_kerja || "-"}</td>
+                        <td className="p-2 border border-slate-200 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const currentStatus = localStatuses[item.id] !== undefined ? localStatuses[item.id] : (item.status || "Offline");
+                            return (
+                              <select
+                                value={currentStatus}
+                                onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                                className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                                style={{ minWidth: '85px', textAlignLast: 'center' }}
+                              >
+                                <option value="Online" className="bg-white text-gray-800">Online</option>
+                                <option value="Offline" className="bg-white text-gray-800">Offline</option>
+                              </select>
+                            );
+                          })()}
                         </td>
-                        <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">
-                          {item.kantor_wilayah || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle text-gray-700">
-                          {item.kantor_area || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle text-gray-700">
-                          {item.kantor_cabang || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle font-mono text-gray-700 text-center font-medium">
-                          {item.kode_unit_kerja || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">
-                          {item.nama_unit_kerja || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 text-center align-middle">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusBadge(item.status)}`}>
-                            {item.status || "Offline"}
-                          </span>
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle text-gray-600">
-                          {item.vendor || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 text-center align-middle font-semibold text-gray-900">
-                          {item.jumlah_kamera !== null && item.jumlah_kamera !== undefined ? item.jumlah_kamera : "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle text-gray-600">
-                          {item.aplikasi || "-"}
-                        </td>
-                        <td className="p-2 border border-slate-200 align-middle text-gray-600">
-                          {item.nama_aplikasi || "-"}
-                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.vendor || "-"}</td>
+                        <td className="p-2 border border-slate-200 text-center align-middle font-semibold text-gray-900">{item.jumlah_kamera ?? "-"}</td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.aplikasi || "-"}</td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.nama_aplikasi || "-"}</td>
                         <td className="p-2 border border-slate-200 align-middle text-gray-600 truncate max-w-xs" title={item.keterangan}>
-                          {item.keterangan || "-"}
+                          {item.status?.toLowerCase() === "offline" ? (item.keterangan || "-") : "-"}
                         </td>
-                        <td className="p-2 border border-slate-200 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setDetailData(item)}
-                              title="Detail Data"
-                              className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            {userRole === "admin" && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => openEdit(item)}
-                                  title="Edit Data"
-                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => askDelete(item.id, item.nama_unit_kerja)}
-                                  title="Hapus Data"
-                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
+                        {userRole === "admin" && (
+                          <td className="p-2 border border-slate-200 text-right align-middle" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(item)}
+                                title="Edit Data"
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => askDelete(item.id, item.nama_unit_kerja)}
+                                title="Hapus Data"
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
@@ -593,9 +660,9 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
             </table>
           </div>
 
-          {/* Pagination Footer */}
+          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-slate-200/85 flex items-center justify-between bg-slate-50/30 print:hidden">
+            <div className="px-6 py-4 border-t border-slate-200/85 flex items-center justify-between bg-slate-50/30">
               <span className="text-xs text-gray-500">
                 Menampilkan {startIndex + 1} sampai {Math.min(startIndex + itemsPerPage, filteredFacilities.length)} dari {filteredFacilities.length} data
               </span>
@@ -633,268 +700,209 @@ export default function SaranaPengamanan({ userRole, facilities = [] }) {
         </div>
       </div>
 
-      {/* Detail Modal */}
-      {detailData && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-              <h3 className="font-bold text-lg text-gray-800">Detail Pengamanan & Korporasi</h3>
+      {/* Form Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-blue-50 p-2 rounded-xl text-blue-600">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-lg text-gray-800">
+                  {editingId ? "Edit Pengamanan & Korporasi" : "Tambah Pengamanan & Korporasi Baru"}
+                </h3>
+              </div>
               <button
                 type="button"
-                onClick={() => setDetailData(null)}
+                onClick={() => setIsModalOpen(false)}
+                disabled={isSaving}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 flex flex-col gap-4 text-sm text-gray-700 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Kode Unit Kerja</span>
-                  <span className="font-semibold text-gray-900 font-mono text-base">{detailData.kode_unit_kerja || "-"}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Nama Unit Kerja</span>
-                  <span className="font-semibold text-gray-900 text-base">{detailData.nama_unit_kerja || "-"}</span>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Kantor Wilayah</span>
-                  <span className="font-medium text-gray-900">{detailData.kantor_wilayah || "-"}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Kantor Area</span>
-                  <span className="font-medium text-gray-900">{detailData.kantor_area || "-"}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Kantor Cabang</span>
-                  <span className="font-medium text-gray-900">{detailData.kantor_cabang || "-"}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Status</span>
-                  <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${getStatusBadge(detailData.status)}`}>
-                    {detailData.status || "Offline"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Vendor</span>
-                  <span className="font-medium text-gray-900">{detailData.vendor || "-"}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Jumlah Kamera</span>
-                  <span className="font-semibold text-blue-700 text-base">{detailData.jumlah_kamera !== null && detailData.jumlah_kamera !== undefined ? detailData.jumlah_kamera : "-"}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Aplikasi</span>
-                  <span className="font-medium text-gray-900">{detailData.aplikasi || "-"}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-400 uppercase">Nama Aplikasi</span>
-                  <span className="font-medium text-gray-900">{detailData.nama_aplikasi || "-"}</span>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-100 pt-3">
-                <span className="block text-xs font-medium text-gray-400 uppercase">Keterangan / Catatan</span>
-                <p className="mt-1 text-gray-600 bg-gray-50 p-2.5 rounded-xl border border-gray-100 break-words whitespace-pre-wrap">
-                  {detailData.keterangan || "Tidak ada keterangan tambahan."}
-                </p>
-              </div>
-
-            </div>
-            <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setDetailData(null)}
-                className="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-medium text-gray-700 transition-colors text-sm"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add / Edit Form Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="font-bold text-lg text-gray-800">
-                {editingId ? "Edit Pengamanan & Korporasi" : "Tambah Pengamanan & Korporasi"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                disabled={isSaving}
-                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
             <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
               <div className="p-5 overflow-y-auto flex-1 custom-scrollbar gap-4 flex flex-col">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Kode Unit Kerja *</label>
+                
+                {/* Grid 1: No. Urut & Kode Unit Kerja */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {editingId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">No. Urut</label>
+                      <input
+                        type="number"
+                        value={formData.no_urut}
+                        onChange={(e) => setFormData((p) => ({ ...p, no_urut: e.target.value }))}
+                        disabled={isSaving}
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="Contoh: 1"
+                      />
+                    </div>
+                  )}
+                  <div className={editingId ? "" : "col-span-2"}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Kode Unit Kerja</label>
                     <input
-                      required
                       type="text"
                       value={formData.kode_unit_kerja}
                       onChange={(e) => setFormData((p) => ({ ...p, kode_unit_kerja: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="Contoh: 12293"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Unit Kerja *</label>
-                    <input
-                      required
-                      type="text"
-                      value={formData.nama_unit_kerja}
-                      onChange={(e) => setFormData((p) => ({ ...p, nama_unit_kerja: e.target.value }))}
-                      disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="Contoh: CP Petamburan"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                {/* Field: Nama Unit Kerja */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Nama Unit Kerja *</label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.nama_unit_kerja}
+                    onChange={(e) => setFormData((p) => ({ ...p, nama_unit_kerja: e.target.value }))}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold"
+                    placeholder="Contoh: CP PETAMBURAN"
+                  />
+                </div>
+
+                {/* Grid 2: Kantor Wilayah, Area, Cabang */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Kantor Wilayah</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Kantor Wilayah</label>
                     <input
                       type="text"
                       value={formData.kantor_wilayah}
                       onChange={(e) => setFormData((p) => ({ ...p, kantor_wilayah: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="KANWIL JAKARTA 1"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Wilayah"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Kantor Area</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Kantor Area</label>
                     <input
                       type="text"
                       value={formData.kantor_area}
                       onChange={(e) => setFormData((p) => ({ ...p, kantor_area: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="AREA SENEN"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Area"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Kantor Cabang</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Kantor Cabang</label>
                     <input
                       type="text"
                       value={formData.kantor_cabang}
                       onChange={(e) => setFormData((p) => ({ ...p, kantor_cabang: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="CP PETAMBURAN"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Cabang"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                {/* Grid 3: Status & Jumlah Kamera */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Status *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Status *</label>
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none bg-white text-xs"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none bg-white text-sm"
                     >
                       <option value="Online">Online</option>
                       <option value="Offline">Offline</option>
                     </select>
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Vendor</label>
-                    <input
-                      type="text"
-                      value={formData.vendor}
-                      onChange={(e) => setFormData((p) => ({ ...p, vendor: e.target.value }))}
-                      disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="Teknisi CCTV Perorangan"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Jumlah Kamera</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Jumlah Kamera</label>
                     <input
                       type="number"
                       value={formData.jumlah_kamera}
                       onChange={(e) => setFormData((p) => ({ ...p, jumlah_kamera: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="4"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Contoh: 10"
                     />
                   </div>
+                </div>
+
+                {/* Grid 4: Aplikasi & Nama Aplikasi */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Aplikasi</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Aplikasi</label>
                     <input
                       type="text"
                       value={formData.aplikasi}
                       onChange={(e) => setFormData((p) => ({ ...p, aplikasi: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="Mobile APP / CMS"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Contoh: Mobile APP"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Aplikasi</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nama Aplikasi</label>
                     <input
                       type="text"
                       value={formData.nama_aplikasi}
                       onChange={(e) => setFormData((p) => ({ ...p, nama_aplikasi: e.target.value }))}
                       disabled={isSaving}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="DMSS / Hik-Connect"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="Contoh: Hik-Connect"
                     />
                   </div>
                 </div>
 
+                {/* Field: Vendor */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Keterangan / Catatan</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Vendor</label>
+                  <input
+                    type="text"
+                    value={formData.vendor}
+                    onChange={(e) => setFormData((p) => ({ ...p, vendor: e.target.value }))}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Contoh: Teknisi CCTV Perorangan"
+                  />
+                </div>
+
+                {/* Field: Keterangan */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Keterangan (Catatan Offline)</label>
                   <textarea
-                    rows="3"
+                    rows="2.5"
                     value={formData.keterangan}
                     onChange={(e) => setFormData((p) => ({ ...p, keterangan: e.target.value }))}
                     disabled={isSaving}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                    placeholder="Catatan tambahan (seperti penyebab offline atau status relokasi)..."
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Tulis alasan jika status Offline..."
                   />
                 </div>
               </div>
+
+              {/* Footer */}
               <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSaving}
-                  className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-xl font-medium text-xs"
+                  className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium text-sm transition-colors"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl flex items-center justify-center gap-2 text-xs"
+                  className="px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"
                 >
-                  {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Simpan Data
                 </button>
               </div>

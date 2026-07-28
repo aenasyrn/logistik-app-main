@@ -15,6 +15,8 @@ import BangunanSewa from "../Bangunan/Sewa";
 import BangunanRenovasi from "../Bangunan/Renovasi";
 import BangunanSarana from "../Bangunan/SaranaPengamanan";
 import BangunanSPK from "../Bangunan/SPK";
+import NotificationPageView from "../Notification/NotificationPageView";
+import SoppGenerator from "../Form/SoppGenerator";
 
 
 export {
@@ -33,4 +35,6 @@ export {
   BangunanRenovasi,
   BangunanSarana,
   BangunanSPK,
+  NotificationPageView,
+  SoppGenerator,
 };

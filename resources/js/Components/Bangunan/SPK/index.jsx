@@ -101,7 +101,7 @@ function capitalizeFirstLetter(str) {
 function PreviewTextarea({ value, onChange, name, placeholder, className = "", ...props }) {
   const textareaRef = useRef(null);
 
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
@@ -334,10 +334,18 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         const shouldPrint = localStorage.getItem("selected_spk_to_print");
         if (shouldPrint) {
           localStorage.removeItem("selected_spk_to_print");
+
+          const styleEl = document.createElement("style");
+          styleEl.id = "spk-print-page-style";
+          styleEl.innerHTML = `@page { size: A4 !important; margin: 0 !important; }`;
+          document.head.appendChild(styleEl);
+
           document.body.classList.add(`print-spk-${type}-only`);
           setTimeout(() => {
             window.print();
             document.body.classList.remove(`print-spk-${type}-only`);
+            const el = document.getElementById("spk-print-page-style");
+            if (el) el.remove();
           }, 350);
         }
 
@@ -397,10 +405,17 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       if (spk.customTerbilang) setCustomTerbilang(spk.customTerbilang);
       if (spk.isCustomTerbilang !== undefined) setIsCustomTerbilang(spk.isCustomTerbilang);
 
+      const styleEl = document.createElement("style");
+      styleEl.id = "spk-print-page-style";
+      styleEl.innerHTML = `@page { size: A4 !important; margin: 0 !important; }`;
+      document.head.appendChild(styleEl);
+
       document.body.classList.add(`print-spk-${type}-only`);
       setTimeout(() => {
         window.print();
         document.body.classList.remove(`print-spk-${type}-only`);
+        const el = document.getElementById("spk-print-page-style");
+        if (el) el.remove();
       }, 600);
     };
 
@@ -1047,10 +1062,17 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   // Print PDF Handler
   const handlePrint = (shouldSave = false) => {
     const doPrint = () => {
+      const styleEl = document.createElement("style");
+      styleEl.id = "spk-print-page-style";
+      styleEl.innerHTML = `@page { size: A4 !important; margin: 0 !important; }`;
+      document.head.appendChild(styleEl);
+
       document.body.classList.add(`print-spk-${type}-only`);
       setTimeout(() => {
         window.print();
         document.body.classList.remove(`print-spk-${type}-only`);
+        const el = document.getElementById("spk-print-page-style");
+        if (el) el.remove();
       }, 600);
     };
 
@@ -1126,11 +1148,11 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     <div key="intro" id={`preview-header-intro-${type}`} className="w-full text-[10pt] leading-[1.35] text-gray-800">
       {/* 1. BAGIAN JUDUL & NOMOR SURAT (Rata Tengah) */}
       <div className="text-center mb-2 w-full">
-        <h2 className={`font-bold uppercase tracking-wide inline-block ${type === "kendaraan" ? "underline" : ""}`} style={{ fontSize: '12pt' }}>
+        <h2 className="font-bold uppercase tracking-wide inline-block underline" style={{ fontSize: '12pt' }}>
           SURAT PERINTAH KERJA (SPK)
         </h2>
         <div className="flex items-center gap-1.5 justify-center mt-0.5" style={{ fontSize: '10pt' }}>
-          <span className="underline">Nomor :</span>
+          <span>Nomor :</span>
           <span
             contentEditable
             suppressContentEditableWarning
@@ -2492,6 +2514,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       blockHeights[id] = child.getBoundingClientRect().height;
     });
 
+
+
     // Hitung tinggi maksimal halaman secara presisi berdasarkan ukuran A4 nyata,
     // bukan angka tebakan, supaya konten tidak overflow dan tanda tangan tidak terpotong.
     const MM_TO_PX = 3.7795; // konversi mm ke px pada 96dpi
@@ -2500,8 +2524,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     const PADDING_BOTTOM_MM = 5;
     const HEADER_MM = 14;
     const FOOTER_MM = 16;
-    const CONTENT_MARGIN_TOP_MM = 14;
-    const CONTENT_MARGIN_BOTTOM_MM = 14;
+    const CONTENT_MARGIN_TOP_MM = 20;
+    const CONTENT_MARGIN_BOTTOM_MM = 23;
     const SAFETY_BUFFER_MM = 12; // buffer ekstra kustom agar aman
 
     const usableHeightMM =
@@ -2743,7 +2767,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 lg:h-[calc(100vh-100px)] lg:max-h-[calc(100vh-100px)] bg-gray-50/50 print:bg-white print:p-0 print:h-auto print:overflow-visible overflow-hidden">
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start p-6 print:bg-white print:p-0 print:h-auto print:overflow-visible">
 
       {/* Dynamic Print CSS Injection */}
       <style>{`
@@ -2782,7 +2806,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         }
         .spk-header {
           position: absolute;
-          top: 4mm;
+          top: 8mm;
           left: 12mm;
           right: 12mm;
           height: 14mm;
@@ -2792,8 +2816,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           padding: 0;
         }
         .spk-content {
-          margin-top: 14mm;
-          margin-bottom: 14mm;
+          margin-top: 20mm;
+          margin-bottom: 23mm;
           flex: 1 1 0%;
           display: flex;
           flex-direction: column;
@@ -2801,7 +2825,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         }
         .spk-footer {
           position: absolute;
-          bottom: 5mm;
+          bottom: 10mm;
           left: 12mm;
           right: 12mm;
           height: 16mm;
@@ -2823,10 +2847,6 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         }
 
         @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
           html, body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -2884,9 +2904,18 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
             background: transparent !important;
           }
           
-          /* Hide the interactive/A4-divided editor panel during print */
+          /* Show screen preview container during print, force zoom to 1 */
           body.print-spk-${type}-only #spk-print-area-${type} {
-            display: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0 !important;
+            zoom: 1 !important;
+            width: auto !important;
+            max-width: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
           /* Global visibility reset for print elements */
@@ -2894,47 +2923,74 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
             visibility: hidden;
           }
 
-          /* Display the print-only optimized layout */
-          body.print-spk-${type}-only .print-only-layout,
-          body.print-spk-${type}-only .print-only-layout * {
+          /* Display the screen preview layout and its descendants */
+          body.print-spk-${type}-only #spk-print-area-${type},
+          body.print-spk-${type}-only #spk-print-area-${type} * {
             visibility: visible !important;
             color: #000000 !important;
           }
 
-          /* Fixed positioning for header logo and letter footer on every printed page */
-          body.print-spk-${type}-only .fixed-header-logo {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            height: 14mm !important;
-            display: block !important;
-            z-index: 9999 !important;
+          /* Preserve original colors for the footer elements */
+          body.print-spk-${type}-only #spk-print-area-${type} .spk-footer,
+          body.print-spk-${type}-only #spk-print-area-${type} .spk-footer * {
+            color: #6b7280 !important; /* text-gray-500 */
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          body.print-spk-${type}-only .fixed-letter-footer {
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            height: 16mm !important;
-            display: block !important;
-            z-index: 9999 !important;
+          body.print-spk-${type}-only #spk-print-area-${type} .spk-footer .text-emerald-600 {
+            color: #059669 !important; /* text-emerald-600 */
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
 
-          /* Avoid page breaks inside signatures, tables, list items */
+          /* Styling of the spk-paper for printing */
+          body.print-spk-${type}-only .spk-paper {
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin: 0 !important;
+            padding: 5mm 12mm 5mm 12mm !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+            display: flex !important;
+            flex-direction: column !important;
+            position: relative !important;
+            box-sizing: border-box !important;
+          }
+
+          body.print-spk-${type}-only .spk-paper:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+
+           /* Keep header and footer positions absolute relative to the spk-paper */
+          body.print-spk-${type}-only .spk-header {
+            position: absolute !important;
+            top: 8mm !important;
+            left: 12mm !important;
+            right: 12mm !important;
+            height: 14mm !important;
+          }
+
+          body.print-spk-${type}-only .spk-footer {
+            position: absolute !important;
+            bottom: 10mm !important;
+            left: 12mm !important;
+            right: 12mm !important;
+            height: 16mm !important;
+          }
+
           #preview-signatures-renovasi,
           #preview-signatures-elektronik,
           #preview-signatures-kendaraan {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-          }
-          table, tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .print-table, .print-table > tbody {
-            page-break-inside: auto !important;
-            break-inside: auto !important;
           }
           .syarat-list-item {
             page-break-inside: avoid !important;
@@ -2967,7 +3023,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       `}</style>
 
       {/* LEFT PANE: Editor Panel */}
-      <div className="w-full lg:w-5/12 bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col no-print shrink-0 overflow-hidden lg:h-full">
+      <div className="xl:col-span-5 bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col no-print shrink-0 overflow-hidden max-h-[85vh]">
         {/* Panel Header */}
         <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
           <div className="flex items-center gap-2.5">
@@ -3992,7 +4048,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       </div>
 
       {/* RIGHT PANE: Live Interactive Preview */}
-      <div className="w-full lg:w-7/12 flex flex-col items-center overflow-y-auto lg:h-full print:h-auto print:overflow-visible pr-2">
+      <div className="xl:col-span-7 flex flex-col items-center overflow-y-auto w-full pr-2 max-h-[90vh] print:h-auto print:overflow-visible">
         {/* Helper bar */}
         <div className="w-full max-w-[210mm] bg-amber-50 border border-amber-200/70 p-3 rounded-xl mb-3 flex items-center justify-between no-print shadow-sm text-amber-900 text-xs">
           <div className="flex items-center gap-2">
@@ -4068,66 +4124,34 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         </div>
 
         {/* The Document Paper (Dynamic A4 Paged SPK Layout) */}
-        <div id={`spk-print-area-${type}`} className="flex flex-col gap-6 w-full max-w-[210mm] print:gap-0 print:w-auto origin-top shrink-0" style={{ zoom: zoomLevel }}>
-          {activePageGroups.map((pageBlockIds, pageIdx) => {
-            return (
-              <div key={pageIdx} className="spk-paper w-full shadow-md select-text print:shadow-none print:border-none relative shrink-0 pb-16 print:pb-0">
-                <HeaderLogo id={`page-header-${pageIdx}`} />
-                <div className="spk-content pb-4">
-                  {renderPageBlocks(pageBlockIds)}
+        <div 
+          className="w-full flex justify-center print:h-auto print:overflow-visible shrink-0" 
+          style={{ height: `${((activePageGroups.length * 1122.5) + ((activePageGroups.length - 1) * 24)) * zoomLevel + 32}px`, overflow: 'hidden' }}
+        >
+          <div id={`spk-print-area-${type}`} className="flex flex-col gap-6 w-full max-w-[210mm] print:gap-0 print:w-auto origin-top shrink-0" style={{ zoom: zoomLevel }}>
+            {activePageGroups.map((pageBlockIds, pageIdx) => {
+              return (
+                <div key={pageIdx} className="spk-paper w-full shadow-md select-text print:shadow-none print:border-none relative shrink-0 pb-16 print:pb-0">
+                  <HeaderLogo id={`page-header-${pageIdx}`} />
+                  <div className="spk-content pb-4">
+                    {renderPageBlocks(pageBlockIds)}
+                  </div>
+                  <LetterFooter key={`page-footer-${pageIdx}`} />
                 </div>
-                <LetterFooter key={`page-footer-${pageIdx}`} />
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Print-only optimized container */}
-        <div className="print-only-layout hidden print:block" style={{ fontFamily: "Arial, sans-serif", fontSize: "11pt", lineHeight: "1.4", color: "#111" }}>
-          <table className="print-table w-full border-none">
-            <thead>
-              <tr>
-                <td>
-                  {/* Spacer for HeaderLogo (14mm header + 5mm padding + safety margin) */}
-                  <div style={{ height: "22mm" }}>&nbsp;</div>
-                </td>
-              </tr>
-            </thead>
-            <tbody>
-              {getDocumentBlocks().map((block) => (
-                <tr key={block.id} data-block-id={block.id} className="w-full overflow-visible">
-                  <td className="print-content-cell align-top font-sans text-justify" style={{ padding: "0 12mm 0 12mm" }}>
-                    {block.render()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>
-                  {/* Spacer for LetterFooter (16mm footer + 5mm padding + safety margin) */}
-                  <div style={{ height: "24mm" }}>&nbsp;</div>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-
-          {/* Fixed Header logo printed on top of every page */}
-          <div className="fixed-header-logo no-print-logo">
-            <HeaderLogo />
-          </div>
-
-          {/* Fixed Footer printed at the bottom of every page */}
-          <div className="fixed-letter-footer">
-            <LetterFooter />
+              );
+            })}
           </div>
         </div>
+
+
+
+
 
         {/* Off-screen measurement wrapper */}
         <div
           ref={measureContainerRef}
           className="absolute left-[-9999px] top-0 pointer-events-none no-print"
-          style={{ width: "210mm", fontSize: "11pt", fontFamily: "Arial, sans-serif", lineHeight: "1.4", color: "#111", padding: "5mm 12mm 5mm 12mm", boxSizing: "border-box" }}
+          style={{ width: "210mm", height: 0, overflow: "hidden", fontSize: "11pt", fontFamily: "Arial, sans-serif", lineHeight: "1.4", color: "#111", padding: "0 12mm", boxSizing: "border-box" }}
         >
           {getDocumentBlocks().map((block) => (
             <div key={block.id} data-block-id={block.id} className="w-full overflow-hidden">

@@ -8,6 +8,7 @@ import ComputerStats       from "./ComputerStats";
 import PrinterStats        from "./PrinterStats";
 import InventoryChart      from "./InventoryChart";
 import BuildingDashboardView from "./BuildingDashboardView";
+import SecurityDashboardView from "./SecurityDashboardView";
 
 const DashboardView = ({
   transactions = [],
@@ -20,10 +21,17 @@ const DashboardView = ({
   buildingLands = [],
   buildingSewas = [],
   buildingRenovations = [],
+  securityFacilities = [],
   landFilter,
   setLandFilter,
   sewaFilter,
   setSewaFilter,
+  securityFilter,
+  setSecurityFilter,
+  computerFilter,
+  setComputerFilter,
+  printerFilter,
+  setPrinterFilter,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState("inventaris");
 
@@ -47,6 +55,12 @@ const DashboardView = ({
           >
             Dashboard Bangunan
           </button>
+          <button 
+            onClick={() => setActiveSubTab("pengamanan")} 
+            className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeSubTab === "pengamanan" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            Dashboard Pengamanan & Korporasi
+          </button>
         </div>
       </div>
 
@@ -57,21 +71,23 @@ const DashboardView = ({
             notifSewa={notifSewa}
             notifSewaKomputer={notifSewaKomputer}
             setView={setView}
+            setPrinterFilter={setPrinterFilter}
+            setComputerFilter={setComputerFilter}
           />
 
           {/* BLOK 2: TRANSAKSI */}
           <TransactionActivity transactions={transactions} setView={setView} />
 
           {/* BLOK 3: KOMPUTER */}
-          <ComputerStats computers={computers} setView={setView} />
+          <ComputerStats computers={computers} setView={setView} setComputerFilter={setComputerFilter} />
 
           {/* BLOK 4: PRINTER */}
-          <PrinterStats printers={printers} setView={setView} />
+          <PrinterStats printers={printers} setView={setView} setPrinterFilter={setPrinterFilter} />
 
           {/* BLOK 5: GRAFIK */}
           <InventoryChart inventory={inventory} />
         </>
-      ) : (
+      ) : activeSubTab === "bangunan" ? (
         <BuildingDashboardView
           buildingLands={buildingLands}
           buildingSewas={buildingSewas}
@@ -79,6 +95,12 @@ const DashboardView = ({
           setView={setView}
           setLandFilter={setLandFilter}
           setSewaFilter={setSewaFilter}
+        />
+      ) : (
+        <SecurityDashboardView
+          securityFacilities={securityFacilities}
+          setView={setView}
+          setSecurityFilter={setSecurityFilter}
         />
       )}
 

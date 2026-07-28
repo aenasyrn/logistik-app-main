@@ -26,7 +26,7 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
       top desktop : AppHeader h-20 sticky dari top-0 → top-[80px] = top-20
     */
     <div
-      className="sticky z-20 bg-gray-100 border-b border-gray-200 px-4 pt-3 flex gap-1 overflow-x-auto custom-scrollbar print:hidden shrink-0"
+      className="sticky z-20 bg-gray-100 dark:bg-[#0c1410] border-b border-gray-200 dark:border-[#213527] px-4 pt-3 flex gap-1 overflow-x-auto custom-scrollbar print:hidden shrink-0 transition-colors"
       style={{ top: "var(--tabbar-top, 128px)" }}
     >
       <style>{`
@@ -40,8 +40,8 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
           onClick={() => handleTabClick(tab.id)}
           className={`group flex items-center gap-2 px-4 py-2 min-w-max border-t border-x rounded-t-xl cursor-pointer transition-all select-none ${
             activeTab === tab.id
-              ? "bg-white border-gray-200 text-blue-700 font-bold shadow-[0_2px_0_0_white]"
-              : "bg-gray-200/50 border-transparent text-gray-500 hover:bg-gray-200"
+              ? "bg-white dark:bg-[#1a2b20] border-gray-200 dark:border-[#2b4533] text-blue-700 dark:text-[#48a359] font-bold shadow-[0_2px_0_0_white] dark:shadow-[0_2px_0_0_#1a2b20]"
+              : "bg-gray-200/50 dark:bg-[#1a2b20]/40 border-transparent text-gray-500 dark:text-[#86988c] hover:bg-gray-200 dark:hover:bg-[#1a2b20]/85"
           }`}
         >
           <span className="text-xs">{tab.title}</span>
@@ -50,8 +50,8 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
               onClick={(e) => closeTab(e, tab.id)}
               className={`p-0.5 rounded-md transition-colors ${
                 activeTab === tab.id
-                  ? "hover:bg-blue-100 text-gray-400 hover:text-red-500"
-                  : "hover:bg-gray-300 text-gray-400"
+                  ? "hover:bg-blue-100 dark:hover:bg-[#2b4533] text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                  : "hover:bg-gray-300 dark:hover:bg-[#2b4533] text-gray-400 dark:text-[#86988c]"
               }`}
             >
               <X className="w-3.5 h-3.5" />

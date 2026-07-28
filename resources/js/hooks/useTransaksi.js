@@ -67,10 +67,28 @@ export function useTransaksi({
   };
 
   // ── Simpan transaksi ───────────────────────────────────────────────────
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ── Simpan transaksi ───────────────────────────────────────────────────
   const handleSaveTransaction = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    const startTime = Date.now();
     try {
       const payload = {
-        ...formData,
+        id: activeTransaction?.id || null,
+        nomorSurat: formData.nomorSurat,
+        tanggal: formData.tanggal,
+        jenisTransaksi: formData.jenisTransaksi,
+        penerimaNama: formData.penerimaNama,
+        penerimaJabatan: formData.penerimaJabatan,
+        penerimaInstansi: formData.penerimaInstansi,
+        pengirimNama: formData.pengirimNama,
+        pengirimJabatan: formData.pengirimJabatan,
+        pengirimInstansi: formData.pengirimInstansi,
+        mengetahuiNama: formData.mengetahuiNama,
+        mengetahuiJabatan: formData.mengetahuiJabatan,
+        lokasi: formData.lokasi,
         items: items.map(item => ({
           nama: item.nama,
           kuantitas: Number(item.kuantitas),
@@ -85,13 +103,36 @@ export function useTransaksi({
       const response = await axios.post('/transactions', payload);
       
       if (response.data.success) {
-        // Sync states by reloading Inertia props
-        router.reload({ only: ['transactions', 'inventory', 'activityLogs'] });
+        const savedTrx = response.data.transaction;
 
-        // Set active transaction for previewing
-        setActiveTransaction(response.data.transaction);
-        showNotif("Transaksi berhasil disimpan & Stok diperbarui!");
-        navigateTo("preview");
+        // Update local transactions state optimistically to bypass loading latency
+        setTransactions(prev => {
+          const exists = prev.some(t => t.id === savedTrx.id);
+          if (exists) {
+            return prev.map(t => t.id === savedTrx.id ? savedTrx : t);
+          } else {
+            return [savedTrx, ...prev];
+          }
+        });
+
+        // Set active transaction & save focused tab
+        setActiveTransaction(savedTrx);
+        localStorage.setItem("riwayat_active_tab", "serah_terima");
+        localStorage.setItem("show_trx_success_toast", "true");
+        
+        // Enforce a minimum 6-second delay to match SOPP timing
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, 6000 - elapsedTime);
+        await new Promise((resolve) => setTimeout(resolve, remainingTime));
+
+        // Navigate immediately so user doesn't get stuck in loading state
+        navigateTo("riwayat");
+
+        // Sync states completely in the background
+        router.reload({ 
+          only: ['transactions', 'inventory', 'activityLogs'],
+          showProgress: false
+        });
       } else {
         showNotif(response.data.message || "Gagal menyimpan transaksi.", "error");
       }
@@ -99,6 +140,8 @@ export function useTransaksi({
       console.error(error);
       const errorMsg = error.response?.data?.message || "Gagal menyimpan transaksi.";
       showNotif(errorMsg, "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -110,5 +153,6 @@ export function useTransaksi({
     addItem, removeItem,
     handleInputChange, handleItemChange,
     handleSaveTransaction,
+    isSaving,
   };
 }

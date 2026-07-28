@@ -7,7 +7,7 @@ import { usePrinterCRUD }    from "./usePrinterCRUD";
 import { usePrinterFilter }  from "./usePrinterFilter";
 import { usePrinterActions } from "./usePrinterActions";
 
-export function usePrinterData(initialPrinters = [], initialOutlets = [], initialInventory = []) {
+export function usePrinterData(initialPrinters = [], initialOutlets = [], initialInventory = [], propFilterStatus, propSetFilterStatus) {
   const [printerData, setPrinterData]     = useState(initialPrinters);
   const [outletsList, setOutletsList]     = useState(initialOutlets);
   const [inventoryList, setInventoryList] = useState(initialInventory);
@@ -35,7 +35,7 @@ export function usePrinterData(initialPrinters = [], initialOutlets = [], initia
 
   // Sub-hooks
   const crud    = usePrinterCRUD({ printerData, setPrinterData, showNotif, outletsList, inventoryList });
-  const filter  = usePrinterFilter(printerData);
+  const filter  = usePrinterFilter(printerData, propFilterStatus, propSetFilterStatus);
   const actions = usePrinterActions({
     filteredData: filter.filteredData,
     setIsSaving:  crud.setIsSaving,
@@ -48,7 +48,7 @@ export function usePrinterData(initialPrinters = [], initialOutlets = [], initia
     crud.setFormData((prev) => ({
       ...prev,
       outlet:   e.target.value,
-      idOutlet: selectedOutlet ? selectedOutlet.kode : "",
+      idOutlet: selectedOutlet ? selectedOutlet.id : "",
     }));
   };
 

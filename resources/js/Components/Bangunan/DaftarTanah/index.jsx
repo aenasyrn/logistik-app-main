@@ -17,6 +17,15 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  React.useEffect(() => {
+    const handleReset = () => {
+      setSearchQuery("");
+      setCurrentPage(1);
+    };
+    window.addEventListener("reset-all-filters", handleReset);
+    return () => window.removeEventListener("reset-all-filters", handleReset);
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -96,11 +105,15 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
     let bgClass = "";
     if (isSelected) {
-      bgClass = isGroupHovered ? "bg-blue-200 text-blue-950" : "bg-blue-100 text-blue-900";
+      bgClass = isGroupHovered
+        ? "bg-blue-200 text-blue-950 dark:bg-[#2e4c37] dark:text-[#f1f5f3]"
+        : "bg-blue-100 text-blue-900 dark:bg-[#1f3526] dark:text-[#48a359]";
     } else if (isGroupHovered) {
-      bgClass = "bg-slate-200 text-gray-900";
+      bgClass = "bg-slate-200 text-gray-900 dark:bg-[#273f2f] dark:text-[#f1f5f3]";
     } else {
-      bgClass = isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800";
+      bgClass = isEven
+        ? "bg-slate-100 text-gray-800 dark:bg-[#213527] dark:text-[#d1dcd4]"
+        : "bg-white text-gray-800 dark:bg-[#1a2b20] dark:text-[#d1dcd4]";
     }
 
     let finalClass = extraClass;
@@ -137,7 +150,16 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
   const filteredLands = lands.filter((item) => {
     if (landFilter === "expired") {
       const sisaHari = hitungSisaHari(item.tgl_berakhir_shgb);
-      if (sisaHari === null || sisaHari > 30 || item.status === "Done") {
+      if (sisaHari === null || sisaHari > 30 || item.status === "Done" || item.status === "Selesai") {
+        return false;
+      }
+    } else if (landFilter === "active") {
+      if (item.status === "Done" || item.status === "Selesai") {
+        return false;
+      }
+    } else if (landFilter === "6months") {
+      const sisaHari = hitungSisaHari(item.tgl_berakhir_shgb);
+      if (sisaHari === null || sisaHari > 180 || item.status === "Done" || item.status === "Selesai") {
         return false;
       }
     }
@@ -179,8 +201,15 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
     );
   });
 
-  // Sort lands so that newly added/highest 'no' shows at the very top
   const sortedLands = [...filteredLands].sort((a, b) => {
+    if (landFilter === "expired" || landFilter === "6months") {
+      const aDate = a.tgl_berakhir_shgb;
+      const bDate = b.tgl_berakhir_shgb;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    }
+
     const noA = a.no !== null && a.no !== undefined ? Number(a.no) : -999999;
     const noB = b.no !== null && b.no !== undefined ? Number(b.no) : -999999;
     if (noA !== noB) return noB - noA;
@@ -521,17 +550,6 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
           </div>
         </div>
 
-        {landFilter === "expired" && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
-            <span className="font-medium">Menampilkan aset tanah yang mendekati masa habis berlaku SHGB / expired.</span>
-            <button 
-              onClick={() => setLandFilter("")} 
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
-            >
-              Hapus Filter
-            </button>
-          </div>
-        )}
 
         {/* Tabel Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -587,6 +605,42 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
             </div>
           </div>
 
+          {landFilter === "expired" && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300 print:hidden">
+              <span className="font-medium">Menampilkan aset tanah yang mendekati masa habis berlaku SHGB / expired.</span>
+              <button
+                onClick={() => setLandFilter("")}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {landFilter === "active" && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between text-sm text-green-800 animate-in fade-in duration-300 print:hidden">
+              <span className="font-medium">Menampilkan aset tanah aktif.</span>
+              <button
+                onClick={() => setLandFilter("")}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {landFilter === "6months" && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300 print:hidden">
+              <span className="font-medium">Menampilkan aset tanah dengan masa berlaku SHGB berakhir dalam &lt; 6 bulan Atau sudah habis.</span>
+              <button
+                onClick={() => setLandFilter("")}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
           {/* Table */}
           <div className={`overflow-x-auto custom-scrollbar ${itemsPerPage > 20 ? "max-h-[60vh] overflow-y-auto" : ""}`}>
             <table className="w-full text-left border-collapse min-w-[2000px]">
@@ -638,7 +692,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
                           <td
                             rowSpan={rowSpanInfo[index].span}
                             onClick={() => handleCellClick(item.id, "no")}
-                            className={getCellClass(item, "no", "text-center font-semibold text-gray-500 bg-white/70")}
+                            className={getCellClass(item, "no", "text-center font-semibold bg-white/70")}
                           >
                             {item._visualNo}
                           </td>
@@ -842,11 +896,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
                         {/* Aksi - Not Merged */}
                         {userRole === "admin" && (
-                          <td className={`p-2 border border-slate-200 align-middle text-right transition-colors duration-150 ${
-                            isSelected
-                              ? (hoveredGroupNo === item._visualNo ? "bg-blue-200 text-blue-950" : "bg-blue-100 text-blue-900")
-                              : (hoveredGroupNo === item._visualNo ? "bg-slate-200 text-gray-900" : isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800")
-                          }`}>
+                          <td className={getCellClass(item, "aksi", "text-right")}>
                             <div className="flex justify-end gap-1">
                               <button
                                 type="button"
@@ -1149,7 +1199,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSaving}
-                  className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium text-sm"
+                  className="px-5 py-2.5 text-gray-600 dark:text-[#a4b4a9] hover:bg-gray-100 dark:hover:bg-[#243e2e] dark:hover:text-white rounded-xl font-medium text-sm transition-colors"
                 >
                   Batal
                 </button>

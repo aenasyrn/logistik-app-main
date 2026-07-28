@@ -3,22 +3,27 @@
 
 /** Mapping viewId → judul tab yang tampil di UI */
 export const VIEW_TITLES = {
-  dashboard:          "Dashboard",
-  riwayat:            "Riwayat Transaksi",
-  master_barang:      "Master Barang",
-  master_outlet:      "Master Instansi",
-  form:               "Buat Surat",
-  preview:            "Preview Surat",
-  perangkat_printer:  "Data Printer",
+  dashboard: "Dashboard",
+  notifikasi: "Notifikasi Peringatan",
+  riwayat: "Riwayat Surat",
+  master_barang: "Master Barang",
+  master_outlet: "Master Instansi",
+  form: "Surat Serah Terima",
+  preview: "Preview Surat",
+  perangkat_printer: "Data Printer",
   perangkat_komputer: "Data PC",
-  kelola_user:        "Kelola Akses",
-  log_aktivitas:      "Log Aktivitas",
-  bangunan_tanah:     "Daftar Tanah",
+  kelola_user: "Kelola Akses",
+  log_aktivitas: "Log Aktivitas",
+  bangunan_tanah: "Daftar Tanah",
 
-  bangunan_sewa:      "Sewa Bangunan",
-  bangunan_renovasi:  "Renovasi Gedung",
-  bangunan_sarana:    "Pengamanan dan Korporasi",
-  bangunan_spk:       "Buat Surat SPK",
+  bangunan_sewa: "Sewa Bangunan",
+  bangunan_renovasi: "Renovasi Gedung",
+  bangunan_sarana: "Pengamanan dan Korporasi",
+  spk_renovasi: "SPK - Renovasi",
+  spk_elektronik: "SPK - Elektronik",
+  spk_kendaraan: "SPK - Kendaraan",
+  sopp_pengadaan: "SOPP - Pengadaan",
+  sopp_sewa: "SOPP - Sewa",
 };
 
 /** Tab awal saat aplikasi pertama kali dibuka */

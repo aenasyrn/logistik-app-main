@@ -14,6 +14,7 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
+            'id' => 'nullable|integer',
             'nomorSurat' => 'required|string|max:255',
             'tanggal' => 'required|date',
             'jenisTransaksi' => 'required|string|in:Barang Masuk,Barang Keluar',
@@ -39,21 +40,67 @@ class TransactionController extends Controller
         $newTrx = null;
 
         DB::transaction(function () use ($data, &$newTrx) {
-            // Create Transaction
-            $newTrx = Transaction::create([
-                'nomor_surat' => $data['nomorSurat'],
-                'tanggal' => $data['tanggal'],
-                'jenis_transaksi' => $data['jenisTransaksi'],
-                'penerima_nama' => $data['penerimaNama'] ?? null,
-                'penerima_jabatan' => $data['penerimaJabatan'] ?? null,
-                'penerima_instansi' => $data['penerimaInstansi'] ?? null,
-                'pengirim_nama' => $data['pengirimNama'] ?? null,
-                'pengirim_jabatan' => $data['pengirimJabatan'] ?? null,
-                'pengirim_instansi' => $data['pengirimInstansi'] ?? null,
-                'mengetahui_nama' => $data['mengetahuiNama'] ?? null,
-                'mengetahui_jabatan' => $data['mengetahuiJabatan'] ?? null,
-                'lokasi' => $data['lokasi'] ?? null,
-            ]);
+            $itemNames = collect($data['items'])->pluck('nama')->toArray();
+            
+            if (isset($data['id']) && $data['id']) {
+                $newTrx = Transaction::findOrFail($data['id']);
+                $oldItemNames = $newTrx->items->pluck('nama')->toArray();
+                $itemNames = array_unique(array_merge($itemNames, $oldItemNames));
+            }
+
+            // Batch fetch all required inventories to minimize DB roundtrips over remote connection
+            $inventories = Inventory::whereIn('nama', $itemNames)->get()->keyBy('nama');
+
+            if (isset($data['id']) && $data['id']) {
+                // Revert previous inventory changes
+                foreach ($newTrx->items as $oldItem) {
+                    $oldDiff = ($newTrx->jenis_transaksi === 'Barang Keluar') 
+                        ? -intval($oldItem->kuantitas) 
+                        : intval($oldItem->kuantitas);
+
+                    $inventory = $inventories->get($oldItem->nama);
+                    if ($inventory) {
+                        $inventory->update([
+                            'kuantitas' => $inventory->kuantitas - $oldDiff,
+                        ]);
+                    }
+                }
+
+                // Delete old items
+                $newTrx->items()->delete();
+
+                // Update Transaction
+                $newTrx->update([
+                    'nomor_surat' => $data['nomorSurat'],
+                    'tanggal' => $data['tanggal'],
+                    'jenis_transaksi' => $data['jenisTransaksi'],
+                    'penerima_nama' => $data['penerimaNama'] ?? null,
+                    'penerima_jabatan' => $data['penerimaJabatan'] ?? null,
+                    'penerima_instansi' => $data['penerimaInstansi'] ?? null,
+                    'pengirim_nama' => $data['pengirimNama'] ?? null,
+                    'pengirim_jabatan' => $data['pengirimJabatan'] ?? null,
+                    'pengirim_instansi' => $data['pengirimInstansi'] ?? null,
+                    'mengetahui_nama' => $data['mengetahuiNama'] ?? null,
+                    'mengetahui_jabatan' => $data['mengetahuiJabatan'] ?? null,
+                    'lokasi' => $data['lokasi'] ?? null,
+                ]);
+            } else {
+                // Create Transaction
+                $newTrx = Transaction::create([
+                    'nomor_surat' => $data['nomorSurat'],
+                    'tanggal' => $data['tanggal'],
+                    'jenis_transaksi' => $data['jenisTransaksi'],
+                    'penerima_nama' => $data['penerimaNama'] ?? null,
+                    'penerima_jabatan' => $data['penerimaJabatan'] ?? null,
+                    'penerima_instansi' => $data['penerimaInstansi'] ?? null,
+                    'pengirim_nama' => $data['pengirimNama'] ?? null,
+                    'pengirim_jabatan' => $data['pengirimJabatan'] ?? null,
+                    'pengirim_instansi' => $data['pengirimInstansi'] ?? null,
+                    'mengetahui_nama' => $data['mengetahuiNama'] ?? null,
+                    'mengetahui_jabatan' => $data['mengetahuiJabatan'] ?? null,
+                    'lokasi' => $data['lokasi'] ?? null,
+                ]);
+            }
 
             // Save items & update stock
             foreach ($data['items'] as $item) {
@@ -74,26 +121,28 @@ class TransactionController extends Controller
                     ? -intval($item['kuantitas']) 
                     : intval($item['kuantitas']);
 
-                $inventory = Inventory::where('nama', $item['nama'])->first();
+                $inventory = $inventories->get($item['nama']);
 
                 if ($inventory) {
                     $inventory->update([
                         'kuantitas' => $inventory->kuantitas + $diff,
                     ]);
                 } else {
-                    Inventory::create([
+                    $newInv = Inventory::create([
                         'nama' => $item['nama'],
                         'kuantitas' => $diff,
                         'satuan' => $item['satuan'],
                         'deskripsi' => 'Dibuat otomatis dari transaksi',
                     ]);
+                    // Store the newly created inventory in our mapping just in case of multiple items of the same type in one transaction
+                    $inventories[$item['nama']] = $newInv;
                 }
             }
 
             // Log activity
             ActivityLog::create([
                 'user_email' => auth()->user()->email,
-                'action' => 'BUAT',
+                'action' => isset($data['id']) && $data['id'] ? 'UBAH' : 'BUAT',
                 'module' => 'TRANSAKSI',
                 'details' => "Surat {$data['jenisTransaksi']} No: {$data['nomorSurat']}",
             ]);
@@ -122,6 +171,9 @@ class TransactionController extends Controller
             'details' => "Menghapus Transaksi No: {$nomorSurat}",
         ]);
 
-        return redirect()->back()->with('message', 'Transaksi berhasil dihapus');
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaksi berhasil dihapus!',
+        ]);
     }
 }

@@ -10,6 +10,14 @@ class InventoryController extends Controller
 {
     public function store(Request $request)
     {
+        $input = $request->all();
+        foreach ($input as $key => $value) {
+            if ($value === '') {
+                $input[$key] = null;
+            }
+        }
+        $request->merge($input);
+
         $request->validate([
             'nama' => 'required|string|max:255',
             'kuantitas' => 'required|integer|min:0',
@@ -41,6 +49,14 @@ class InventoryController extends Controller
 
     public function update(Request $request, $id)
     {
+        $input = $request->all();
+        foreach ($input as $key => $value) {
+            if ($value === '') {
+                $input[$key] = null;
+            }
+        }
+        $request->merge($input);
+
         $request->validate([
             'nama' => 'required|string|max:255',
             'kuantitas' => 'required|integer|min:0',
@@ -86,5 +102,70 @@ class InventoryController extends Controller
         ]);
 
         return redirect()->back()->with('message', 'Barang berhasil dihapus');
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'rows' => 'required|array',
+        ]);
+
+        $rows = $request->input('rows');
+        $importedCount = 0;
+
+        $existingInventories = \App\Models\Inventory::all()->keyBy('nama');
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($rows, &$importedCount, &$existingInventories) {
+            foreach ($rows as $row) {
+                if (empty($row['nama'])) {
+                    continue;
+                }
+
+                $nama = trim($row['nama']);
+                $item = isset($existingInventories[$nama]) ? $existingInventories[$nama] : null;
+
+                $data = [
+                    'kuantitas' => !empty($row['kuantitas']) ? intval($row['kuantitas']) : 0,
+                    'satuan' => $row['satuan'] ?? 'Pcs',
+                    'vendor_nama' => $row['vendor_nama'] ?? null,
+                    'no_spk' => $row['no_spk'] ?? null,
+                    'no_pks' => $row['no_pks'] ?? null,
+                    'tanggal_mulai' => !empty($row['tanggal_mulai']) ? $row['tanggal_mulai'] : null,
+                    'tanggal_selesai' => !empty($row['tanggal_selesai']) ? $row['tanggal_selesai'] : null,
+                    'masa_sewa_bulan' => !empty($row['masa_sewa_bulan']) ? intval($row['masa_sewa_bulan']) : 0,
+                    'status' => $row['status'] ?? 'Inventaris',
+                    'deskripsi' => $row['deskripsi'] ?? null,
+                ];
+
+                if ($item) {
+                    $changed = false;
+                    foreach ($data as $key => $val) {
+                        if ($item->{$key} !== $val) {
+                            $item->{$key} = $val;
+                            $changed = true;
+                        }
+                    }
+                    if ($changed) {
+                        $item->save();
+                    }
+                } else {
+                    $item = \App\Models\Inventory::create(array_merge(['nama' => $nama], $data));
+                    $existingInventories[$nama] = $item;
+                }
+                $importedCount++;
+            }
+        });
+
+        ActivityLog::create([
+            'user_email' => auth()->user()->email,
+            'action' => 'Import CSV',
+            'module' => 'Master Barang',
+            'details' => "Mengimpor massal {$importedCount} data barang",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$importedCount} data barang berhasil diimpor",
+        ]);
     }
 }

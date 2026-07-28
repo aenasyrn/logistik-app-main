@@ -13,18 +13,19 @@ export function useKomputerActions({ filteredData, setIsSaving, showNotif }) {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    showNotif("Sedang memproses dan mengunggah CSV...");
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async ({ data }) => {
         try {
           const total = await importKomputerCSV(APP_ID, data);
-          showNotif(`Sukses! ${total} data komputer berhasil di-import. Memuat ulang...`);
-          setTimeout(() => window.location.reload(), 2000);
+          showNotif(`Sukses! ${total} data komputer berhasil di-import.`, "success", () => {
+            window.location.reload(); // Re-fetch the page on confirmation (or router.reload)
+          });
         } catch (err) {
           console.error(err);
-          showNotif("Gagal import! Pastikan kolom header persis seperti template.", "error");
+          const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan kolom header persis seperti template.";
+          showNotif(errorMsg, "error");
         } finally {
           setIsSaving(false);
           if (fileInputRef.current) fileInputRef.current.value = "";
@@ -55,7 +56,7 @@ export function useKomputerActions({ filteredData, setIsSaving, showNotif }) {
       "Tgl Mulai Sewa":   item.tanggalMulai   || "",
       "Tgl Selesai Sewa": item.tanggalSelesai || "",
       "Status":           item.status         || "",
-      "Catatan":          item.deskripsi      || "",
+      "Keterangan":       item.keterangan     || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);

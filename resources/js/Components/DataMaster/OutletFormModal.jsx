@@ -12,8 +12,8 @@ export default function OutletFormModal({ isOpen, onClose, editingOutlet, onSubm
         {/* HEADER MODAL */}
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="bg-purple-100 p-2 rounded-xl">
-              {editingOutlet ? <Edit className="w-5 h-5 text-purple-600" /> : <MapPin className="w-5 h-5 text-purple-600" />}
+            <div className="bg-blue-100 p-2 rounded-xl">
+              {editingOutlet ? <Edit className="w-5 h-5 text-blue-600" /> : <MapPin className="w-5 h-5 text-blue-600" />}
             </div>
             <h3 className="font-bold text-lg text-gray-800">
               {editingOutlet ? "Edit Instansi" : "Tambah Instansi Baru"}
@@ -32,7 +32,7 @@ export default function OutletFormModal({ isOpen, onClose, editingOutlet, onSubm
               <input
                 name="kode"
                 defaultValue={editingOutlet?.code || ""}
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -41,7 +41,7 @@ export default function OutletFormModal({ isOpen, onClose, editingOutlet, onSubm
                 name="nama"
                 defaultValue={editingOutlet?.nama || ""}
                 required
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -58,7 +58,7 @@ export default function OutletFormModal({ isOpen, onClose, editingOutlet, onSubm
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-6 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                className="px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
               >
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                 {editingOutlet ? "Simpan Perubahan" : "Simpan Outlet"}

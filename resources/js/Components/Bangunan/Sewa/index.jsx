@@ -18,21 +18,21 @@ const getDateSearchStrings = (dateString) => {
   if (!dateString) return [];
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return [];
-  
+
   const day = String(date.getDate()).padStart(2, "0");
   const monthNum = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
-  
+
   const slashDate = `${day}/${monthNum}/${year}`;
   const isoDate = dateString.substring(0, 10);
-  
+
   const monthsIndo = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
   const monthIndo = monthsIndo[date.getMonth()];
   const indoDate = `${date.getDate()} ${monthIndo} ${year}`;
-  
+
   return [slashDate.toLowerCase(), isoDate.toLowerCase(), indoDate.toLowerCase(), monthIndo.toLowerCase()];
 };
 
@@ -41,16 +41,42 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Filter States
   const [filterExpiry, setFilterExpiry] = useState("all");
   const [filterTypeOutlet, setFilterTypeOutlet] = useState("all");
   const [filterTypeBangunan, setFilterTypeBangunan] = useState("all");
   const [filterStatusGedung, setFilterStatusGedung] = useState("all");
   const [filterOutletCategory, setFilterOutletCategory] = useState("all");
 
+  useEffect(() => {
+    if (sewaFilter === "") {
+      setSearchQuery("");
+      setFilterExpiry("all");
+      setFilterTypeOutlet("all");
+      setFilterTypeBangunan("all");
+      setFilterStatusGedung("all");
+      setFilterOutletCategory("all");
+    }
+  }, [sewaFilter]);
+
+  useEffect(() => {
+    const handleReset = () => {
+      setSearchQuery("");
+      setFilterExpiry("all");
+      setFilterTypeOutlet("all");
+      setFilterTypeBangunan("all");
+      setFilterStatusGedung("all");
+      setFilterOutletCategory("all");
+      setCurrentPage(1);
+    };
+    window.addEventListener("reset-all-filters", handleReset);
+    return () => window.removeEventListener("reset-all-filters", handleReset);
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [localStatuses, setLocalStatuses] = useState({});
 
   const [formData, setFormData] = useState({
     outlet_id: "",
@@ -72,6 +98,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
     kecamatan: "",
     kab_kota: "",
     provinsi: "",
+    status: "",
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
@@ -80,6 +107,32 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
 
   const showNotif = (message, type = "success") => {
     setNotif({ show: true, message, type });
+  };
+
+  const handleStatusChange = async (id, newStatus) => {
+    const oldStatus = localStatuses[id] !== undefined ? localStatuses[id] : (sewas.find(s => s.id === id)?.status || getStatusInfo(sewas.find(s => s.id === id)));
+
+    // Update UI immediately (optimistic update)
+    setLocalStatuses(prev => ({ ...prev, [id]: newStatus }));
+
+    try {
+      await axios.put(`/building-sewas/${id}/status`, { status: newStatus });
+      router.reload({
+        only: ["buildingSewas", "activityLogs"],
+        onSuccess: () => {
+          setLocalStatuses(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      showNotif("Gagal mengubah status.", "error");
+      // Rollback to old status if server call fails
+      setLocalStatuses(prev => ({ ...prev, [id]: oldStatus }));
+    }
   };
 
   const filterTypeOutletOptions = [
@@ -103,11 +156,11 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
   const filteredSewas = sewas.filter((item) => {
     // 1. Search Query filter
     const q = searchQuery.toLowerCase();
-    
+
     // Generate date search strings for tgl_kontrak_mulai and tgl_kontrak_berakhir
     const tglMulai = item.tgl_kontrak_mulai || item.tanggal_kontrak_mulai || item.tanggal_mulai;
     const tglBerakhir = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir || item.tanggal_selesai;
-    
+
     const datesSearchStrings = [
       ...getDateSearchStrings(tglMulai),
       ...getDateSearchStrings(tglBerakhir)
@@ -151,7 +204,20 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       expiration.setHours(0, 0, 0, 0);
       const diffTime = expiration.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays > 30 || item.status === "Done") return false;
+      if (diffDays > 30 || item.status === "Done" || item.status === "Selesai") return false;
+    } else if (sewaFilter === "active") {
+      const statusInfo = getStatusInfo(item);
+      if (statusInfo !== "Aktif" && statusInfo !== "Hampir Habis") return false;
+    } else if (sewaFilter === "6months") {
+      const targetDate = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
+      if (!targetDate) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiration = new Date(targetDate);
+      expiration.setHours(0, 0, 0, 0);
+      const diffTime = expiration.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays > 180 || item.status === "Done" || item.status === "Selesai") return false;
     }
 
     // 2. Expiry filter (mau habis: sisa waktu <= 30 hari)
@@ -164,7 +230,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       expiration.setHours(0, 0, 0, 0);
       const diffTime = expiration.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       // Expiring soon: remaining days <= 30 and >= 0 (not expired yet)
       if (diffDays > 30 || diffDays < 0) return false;
     }
@@ -201,10 +267,23 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
     return true;
   });
 
+  // Sort sewas if filter is active
+  const sortedSewas = [...filteredSewas].sort((a, b) => {
+    if (sewaFilter === "expired" || sewaFilter === "6months" || filterExpiry === "expiring_30") {
+      const aDate = a.tgl_kontrak_berakhir || a.tanggal_kontrak_berakhir || a.tanggal_mulai;
+      const bDate = b.tgl_kontrak_berakhir || b.tanggal_kontrak_berakhir || b.tanggal_mulai;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    }
+    // Default: Sort by id descending
+    return b.id - a.id;
+  });
+
   // Pagination calculations
-  const totalPages = Math.ceil(filteredSewas.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedSewas.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredSewas.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = sortedSewas.slice(startIndex, startIndex + itemsPerPage);
 
   const openAdd = () => {
     setEditingId(null);
@@ -228,6 +307,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       kecamatan: "",
       kab_kota: "",
       provinsi: "",
+      status: "Aktif",
     });
     setIsModalOpen(true);
   };
@@ -267,6 +347,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       kecamatan: item.kecamatan || "",
       kab_kota: item.kab_kota || item.kabKota || "",
       provinsi: item.provinsi || "",
+      status: item.status || getStatusInfo(item) || "Aktif",
     });
     setIsModalOpen(true);
   };
@@ -314,6 +395,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       kecamatan: formData.kecamatan,
       kab_kota: formData.kab_kota,
       provinsi: formData.provinsi,
+      status: formData.status,
     };
 
     if (editingId) {
@@ -414,7 +496,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
   return (
     <>
       <div className="max-w-7xl mx-auto p-6 animate-in fade-in duration-300 relative print:p-0">
-        
+
         {/* Header (Disembunyikan saat print) */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 print:hidden">
           <div>
@@ -509,7 +591,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
                   </select>
                   <span>entries</span>
                 </div>
-                
+
                 {/* Reset Filters button if any filter active */}
                 {(filterExpiry !== "all" || filterTypeOutlet !== "all" || filterTypeBangunan !== "all" || filterStatusGedung !== "all" || filterOutletCategory !== "all" || searchQuery !== "") && (
                   <button
@@ -626,8 +708,32 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
           {sewaFilter === "expired" && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
               <span className="font-medium">Menampilkan kontrak sewa bangunan yang mendekati masa habis kontrak / expired.</span>
-              <button 
-                onClick={() => setSewaFilter("")} 
+              <button
+                onClick={() => setSewaFilter("")}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {sewaFilter === "active" && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between text-sm text-green-800 animate-in fade-in duration-300">
+              <span className="font-medium">Menampilkan sewa dengan perjanjian aktif.</span>
+              <button
+                onClick={() => setSewaFilter("")}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {sewaFilter === "6months" && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
+              <span className="font-medium">Menampilkan sewa dengan masa kontrak berakhir dalam &lt; 6 bulan atau sudah habis.</span>
+              <button
+                onClick={() => setSewaFilter("")}
                 className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
               >
                 Hapus Filter
@@ -649,6 +755,8 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
             onEdit={openEdit}
             onDelete={askDelete}
             onDetail={setDetailData}
+            localStatuses={localStatuses}
+            onStatusChange={handleStatusChange}
           />
         </div>
       </div>
@@ -680,7 +788,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
               </button>
             </div>
             <div className="p-5 flex flex-col gap-4 text-sm text-gray-700 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <span className="block text-xs font-medium text-gray-400 uppercase">Kode Outlet</span>

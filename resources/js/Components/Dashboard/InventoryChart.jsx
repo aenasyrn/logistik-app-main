@@ -2,8 +2,15 @@
 import { BarChart3, Package } from "lucide-react";
 
 export default function InventoryChart({ inventory = [] }) {
-  const chartData = [...inventory].sort((a, b) => Number(b.stok) - Number(a.stok));
-  const maxStok = chartData.length > 0 ? Math.max(...chartData.map((i) => Number(i.stok))) : 1;
+  const chartData = [...inventory].sort((a, b) => {
+    const bStok = b.kuantitas !== undefined ? b.kuantitas : (b.stok || 0);
+    const aStok = a.kuantitas !== undefined ? a.kuantitas : (a.stok || 0);
+    return Number(bStok) - Number(aStok);
+  });
+  const maxStok = chartData.length > 0 ? Math.max(...chartData.map((i) => {
+    const s = i.kuantitas !== undefined ? i.kuantitas : (i.stok || 0);
+    return Number(s);
+  })) : 1;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
@@ -25,7 +32,7 @@ export default function InventoryChart({ inventory = [] }) {
         ) : (
           <div className="flex items-end gap-2 h-48 overflow-x-auto custom-scrollbar pb-2 pt-6 px-1">
             {chartData.slice(0, 15).map((item) => { 
-              const stokValue = Number(item.stok);
+              const stokValue = Number(item.kuantitas !== undefined ? item.kuantitas : (item.stok || 0));
               const heightPct = maxStok > 0 ? (stokValue / maxStok) * 100 : 0;
               return (
                 <div key={item.id} className="flex flex-col items-center shrink-0 w-20 group h-full">

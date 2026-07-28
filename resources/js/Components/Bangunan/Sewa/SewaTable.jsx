@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Edit, Trash2, Eye, Calendar, User, DollarSign, Building } from "lucide-react";
+import { Edit, Trash2, Calendar, User, DollarSign, Building } from "lucide-react";
 
 export const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -20,7 +20,16 @@ export const hitungSisaWaktu = (tanggalSelesai) => {
   const tglSelesai = new Date(tanggalSelesai);
   tglSelesai.setHours(0, 0, 0, 0);
 
-  if (tglSelesai < hariIni) return "—";
+  if (tglSelesai < hariIni) {
+    const diffTime = hariIni.getTime() - tglSelesai.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays <= 30) {
+      return `Habis ${diffDays} hari`;
+    } else {
+      const diffMonths = (hariIni.getFullYear() - tglSelesai.getFullYear()) * 12 + (hariIni.getMonth() - tglSelesai.getMonth());
+      return `Habis ${diffMonths > 0 ? diffMonths : 0} bln`;
+    }
+  }
 
   const diffTime = tglSelesai.getTime() - hariIni.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -41,7 +50,7 @@ export const getStatusInfo = (sewa) => {
   const tglSelesai = new Date(sewa.tgl_kontrak_berakhir || sewa.tanggal_kontrak_berakhir);
   tglSelesai.setHours(0, 0, 0, 0);
 
-  if (tglSelesai < hariIni) return "Expired";
+  if (tglSelesai < hariIni) return "Sewa Habis";
 
   const diffTime = tglSelesai.getTime() - hariIni.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -63,6 +72,8 @@ export default function SewaTable({
   onEdit,
   onDelete,
   onDetail,
+  localStatuses = {},
+  onStatusChange,
 }) {
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -75,11 +86,13 @@ export default function SewaTable({
   const getStatusBadge = (status) => {
     switch (status) {
       case "Selesai":
-        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Done":
+        return "bg-blue-100 text-blue-800 border-blue-300 font-extrabold shadow-sm";
       case "Aktif":
         return "bg-green-50 text-green-700 border-green-200";
       case "Hampir Habis":
         return "bg-red-50 text-red-700 border-red-200";
+      case "Sewa Habis":
       case "Expired":
         return "bg-red-100 text-red-800 border-red-200";
       default:
@@ -162,11 +175,15 @@ export default function SewaTable({
 
                 let bgClass = "";
                 if (isSelected) {
-                  bgClass = isHovered ? "bg-blue-200 text-blue-950" : "bg-blue-100 text-blue-900";
+                  bgClass = isHovered 
+                    ? "bg-blue-200 text-blue-950 dark:bg-[#2e4c37] dark:text-[#f1f5f3]" 
+                    : "bg-blue-100 text-blue-900 dark:bg-[#1f3526] dark:text-[#48a359]";
                 } else if (isHovered) {
-                  bgClass = "bg-slate-200 text-gray-900";
+                  bgClass = "bg-slate-200 text-gray-900 dark:bg-[#273f2f] dark:text-[#f1f5f3]";
                 } else {
-                  bgClass = isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800";
+                  bgClass = isEven 
+                    ? "bg-slate-100 text-gray-800 dark:bg-[#213527] dark:text-[#d1dcd4]" 
+                    : "bg-white text-gray-800 dark:bg-[#1a2b20] dark:text-[#d1dcd4]";
                 }
 
                 return (
@@ -177,21 +194,60 @@ export default function SewaTable({
                     onClick={() => setSelectedId((prev) => (prev === item.id ? null : item.id))}
                     className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                   >
-                    <td className="p-2 border border-slate-200 text-center align-middle text-xs font-medium text-gray-500">{globalIndex}</td>
+                    <td className="p-2 border border-slate-200 text-center align-middle text-xs font-medium">{globalIndex}</td>
                     <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">{item.kode_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">{item.nama_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_bangunan || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.jenis_sto || "-"}</td>
                     <td className="p-2 border border-slate-200 text-center align-middle font-medium text-xs">
-                      <span className={status === "Hampir Habis" ? "text-red-600 font-bold" : "text-gray-700"}>
+                      <span className={(status === "Hampir Habis" || status === "Sewa Habis") ? "text-red-600 font-bold" : "text-gray-700"}>
                         {hitungSisaWaktu(item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir)}
                       </span>
                     </td>
-                    <td className="p-2 border border-slate-200 text-center align-middle">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusBadge(status)}`}>
-                        {status}
-                      </span>
+                    <td className="p-2 border border-slate-200 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const originalStatus = item.status === "Done" || item.status === "Selesai" ? "Selesai" : status;
+                        const currentStatus = localStatuses[item.id] !== undefined 
+                          ? localStatuses[item.id] 
+                          : originalStatus;
+
+                        const displayStatus = currentStatus === "Done" || currentStatus === "Selesai" 
+                          ? "Selesai" 
+                          : (currentStatus === "Expired" ? "Sewa Habis" : currentStatus);
+
+                        if (originalStatus === "Expired" || originalStatus === "Sewa Habis") {
+                          return (
+                            <select
+                              value={displayStatus}
+                              onChange={(e) => onStatusChange(item.id, e.target.value)}
+                              className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                              style={{ minWidth: '105px', textAlignLast: 'center' }}
+                            >
+                              <option value="Sewa Habis" className="bg-white text-gray-800">Sewa Habis</option>
+                              <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                            </select>
+                          );
+                        } else if (originalStatus === "Hampir Habis") {
+                          return (
+                            <select
+                              value={displayStatus}
+                              onChange={(e) => onStatusChange(item.id, e.target.value)}
+                              className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                              style={{ minWidth: '105px', textAlignLast: 'center' }}
+                            >
+                              <option value="Hampir Habis" className="bg-white text-gray-800">Hampir Habis</option>
+                              <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                            </select>
+                          );
+                        } else {
+                          return (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${getStatusBadge(currentStatus)}`} style={{ minWidth: '105px', textAlign: 'center' }}>
+                              {displayStatus}
+                            </span>
+                          );
+                        }
+                      })()}
                     </td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-900 font-medium">{formatHarga(item.harga_sewa)}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.status_gedung || "-"}</td>
@@ -208,14 +264,6 @@ export default function SewaTable({
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.provinsi || "-"}</td>
                     <td className="p-2 border border-slate-200 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onDetail(item)}
-                          title="Detail Sewa"
-                          className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
                         {userRole === "admin" && (
                           <>
                             <button

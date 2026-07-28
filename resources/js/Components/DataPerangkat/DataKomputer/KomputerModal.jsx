@@ -1,8 +1,74 @@
-// src/components/DataPerangkat/DataKomputer/KomputerModal.jsx
-"use client";
-
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Loader2 } from "lucide-react";
+
+const SearchableSelect = ({ label, value, onChange, options, placeholder, disabled, className, labelCls }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const filteredOptions = options.filter(opt => 
+    opt.nama?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} className="relative w-full text-left">
+      <label className={labelCls}>{label}</label>
+      <div 
+        onClick={() => { if (!disabled) { setIsOpen(!isOpen); setSearch(""); } }}
+        className={`w-full px-2.5 py-1.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-xs ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || placeholder}
+        </span>
+        <svg className="w-4 h-4 text-gray-400 shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto flex flex-col p-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari..."
+            className="w-full px-2 py-1 mb-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+          />
+          <div className="overflow-y-auto max-h-48 custom-scrollbar">
+            {filteredOptions.length === 0 ? (
+              <div className="p-2 text-xs text-gray-500 text-center">Tidak ada hasil</div>
+            ) : (
+              filteredOptions.map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => {
+                    onChange({ target: { value: opt.nama } });
+                    setIsOpen(false);
+                  }}
+                  className="px-2.5 py-1.5 text-xs text-gray-700 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors text-left"
+                >
+                  {opt.nama}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function KomputerModal({
   isOpen,
@@ -61,16 +127,16 @@ export default function KomputerModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Nama Outlet */}
                   <div className="sm:col-span-2">
-                    <label className={labelCls}>Nama Outlet</label>
-                    <input
-                      required type="text" list="outlets-suggestions"
-                      value={formData.outlet} onChange={onOutletChange}
+                    <SearchableSelect
+                      label="Nama Outlet"
+                      value={formData.outlet}
+                      onChange={onOutletChange}
+                      options={outletsList}
+                      placeholder="Pilih outlet..."
                       disabled={isSaving}
-                      className={inputCls} placeholder="Pilih outlet..."
+                      className={inputCls}
+                      labelCls={labelCls}
                     />
-                    <datalist id="outlets-suggestions">
-                      {outletsList.map((o) => <option key={o.id} value={o.nama} />)}
-                    </datalist>
                   </div>
 
                   {/* ID Outlet */}
@@ -85,16 +151,16 @@ export default function KomputerModal({
 
                   {/* Produk */}
                   <div className="sm:col-span-2">
-                    <label className={labelCls}>Produk / Model PC</label>
-                    <input
-                      required type="text" list="produk-suggestions"
-                      value={formData.produk} onChange={onProdukChange}
+                    <SearchableSelect
+                      label="Produk / Model PC"
+                      value={formData.produk}
+                      onChange={onProdukChange}
+                      options={inventoryList}
+                      placeholder="Pilih produk..."
                       disabled={isSaving}
-                      className={inputCls} placeholder="Misal: OptiPlex SFF 7020..."
+                      className={inputCls}
+                      labelCls={labelCls}
                     />
-                    <datalist id="produk-suggestions">
-                      {inventoryList.map((inv) => <option key={inv.id} value={inv.nama} />)}
-                    </datalist>
                   </div>
 
                   {/* Serial Number */}
@@ -233,10 +299,10 @@ export default function KomputerModal({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelCls}>Catatan Tambahan (Opsional)</label>
+                    <label className={labelCls}>Keterangan</label>
                     <textarea
-                      rows="3" value={formData.deskripsi}
-                      onChange={(e) => setFormData((p) => ({ ...p, deskripsi: e.target.value }))}
+                      rows="3" value={formData.keterangan || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, keterangan: e.target.value }))}
                       disabled={isSaving}
                       className={`${inputPurple} resize-none custom-scrollbar`}
                       placeholder="Isi jika ada kerusakan atau catatan..."

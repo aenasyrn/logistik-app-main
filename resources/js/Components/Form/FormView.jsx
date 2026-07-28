@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText, ArrowRight, Plus, Trash2, AlertCircle,
   PackageCheck, PackageMinus, User, Building2, Hash,
@@ -44,6 +44,31 @@ const FormView = ({
   const [jenisTransaksi, setJenisTransaksi] = useState(
     formData.jenisTransaksi || "Barang Keluar"
   );
+
+  // Sync local states with loaded transaction data when editing or starting new
+  useEffect(() => {
+    if (formData.nomorSurat) {
+      const match = formData.nomorSurat.match(/^(\d{3})/);
+      if (match) {
+        const paddedLocal = (nomorUrut || "").padStart(3, "0");
+        if (match[1] !== paddedLocal) {
+          setNomorUrut(match[1]);
+        }
+      } else {
+        setNomorUrut("");
+      }
+    } else {
+      setNomorUrut("");
+    }
+  }, [formData.nomorSurat]);
+
+  useEffect(() => {
+    if (formData.jenisTransaksi) {
+      setJenisTransaksi(formData.jenisTransaksi);
+    } else {
+      setJenisTransaksi("Barang Keluar");
+    }
+  }, [formData.jenisTransaksi]);
 
   const tahun = new Date().getFullYear();
   const suffix = `/00108.00/04/${tahun}`;
@@ -107,21 +132,19 @@ const FormView = ({
               <div className="flex gap-2 mt-0.5">
                 <button
                   onClick={() => handleJenisChange("Barang Keluar")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                    isKeluar
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${isKeluar
                       ? "bg-red-50 border-red-300 text-red-700"
                       : "bg-white border-gray-200 text-gray-400 hover:border-gray-300"
-                  }`}
+                    }`}
                 >
                   <PackageMinus className="w-3.5 h-3.5" /> Keluar
                 </button>
                 <button
                   onClick={() => handleJenisChange("Barang Masuk")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                    !isKeluar
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${!isKeluar
                       ? "bg-green-50 border-green-300 text-green-700"
                       : "bg-white border-gray-200 text-gray-400 hover:border-gray-300"
-                  }`}
+                    }`}
                 >
                   <PackageCheck className="w-3.5 h-3.5" /> Masuk
                 </button>
@@ -133,13 +156,12 @@ const FormView = ({
           <div className="md:col-span-5">
             <Field label="Nomor Surat" icon={Hash}>
               <div
-                className={`flex items-center rounded-lg border overflow-hidden transition-all ${
-                  nomorIsValid
-                    ? "border-green-400 bg-green-50 ring-2 ring-green-50"
+                className={`flex items-center rounded-lg border overflow-hidden transition-all ${nomorIsValid
+                    ? "border-green-400 bg-green-50 ring-2 ring-green-50 dark:border-emerald-600 dark:bg-emerald-950/30 dark:ring-emerald-900/30"
                     : nomorIs000
-                    ? "border-red-300 bg-red-50"
-                    : "border-gray-200 bg-white"
-                }`}
+                      ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+                      : "border-gray-200 bg-white dark:border-[#2b4533] dark:bg-[#0f1712]"
+                  }`}
               >
                 <input
                   type="text"
@@ -148,9 +170,9 @@ const FormView = ({
                   placeholder="000"
                   value={nomorUrut}
                   onChange={handleNomorChange}
-                  className="w-16 py-2 pl-3 text-center font-mono font-bold text-base outline-none bg-transparent text-gray-900"
+                  className="w-16 py-2 pl-3 text-center font-mono font-bold text-base outline-none bg-transparent text-gray-900 dark:text-[#f1f5f3]"
                 />
-                <span className="text-gray-400 font-mono text-xs px-2 border-l border-gray-200 bg-gray-50/80 py-2 select-none">
+                <span className="text-gray-400 font-mono text-xs px-2 border-l border-gray-200 bg-gray-50/80 dark:border-[#2b4533] dark:bg-[#1e3125] py-2 select-none dark:text-emerald-400/80">
                   {suffix}
                 </span>
               </div>
@@ -312,7 +334,7 @@ const FormView = ({
                         list="db-barang"
                         value={item.nama}
                         onChange={(e) => handleItemChange(item.id, "nama", e.target.value)}
-                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none"
+                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                         placeholder="Ketik atau pilih..."
                       />
                     </td>
@@ -320,7 +342,7 @@ const FormView = ({
                       <input
                         value={item.sn}
                         onChange={(e) => handleItemChange(item.id, "sn", e.target.value)}
-                        className="w-full text-xs font-mono px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none"
+                        className="w-full text-xs font-mono px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                         placeholder="Serial number"
                       />
                     </td>
@@ -330,14 +352,14 @@ const FormView = ({
                         min="1"
                         value={item.kuantitas}
                         onChange={(e) => handleItemChange(item.id, "kuantitas", e.target.value)}
-                        className="w-full text-xs text-center px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none"
+                        className="w-full text-xs text-center px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                       />
                     </td>
                     <td className="px-2 py-2 relative">
                       <select
                         value={item.satuan}
                         onChange={(e) => handleItemChange(item.id, "satuan", e.target.value)}
-                        className="w-full text-xs appearance-none px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none pr-7 cursor-pointer"
+                        className="w-full text-xs appearance-none px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none pr-7 cursor-pointer dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                       >
                         <option>Pcs</option>
                         <option>Unit</option>
@@ -352,7 +374,7 @@ const FormView = ({
                         list="db-instansi"
                         value={item.outlet || ""}
                         onChange={(e) => handleItemChange(item.id, "outlet", e.target.value)}
-                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none"
+                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                         placeholder="Pilih outlet..."
                       />
                     </td>
@@ -360,7 +382,7 @@ const FormView = ({
                       <input
                         value={item.keterangan}
                         onChange={(e) => handleItemChange(item.id, "keterangan", e.target.value)}
-                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none"
+                        className="w-full text-xs px-2 py-2 border border-transparent hover:border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
                         placeholder="Catatan..."
                       />
                     </td>

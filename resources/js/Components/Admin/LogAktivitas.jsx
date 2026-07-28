@@ -115,7 +115,13 @@ export default function LogAktivitas({ logs }) {
                     </td>
                     <td className="p-4">
                       <span
-                        className={`px-2 py-1 rounded text-[10px] font-bold ${log.aksi === "TAMBAH" || log.aksi === "BUAT" ? "bg-green-100 text-green-700" : log.aksi === "HAPUS" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}
+                        className={`inline-block w-16 text-center py-1 rounded text-[10px] font-bold ${
+                          (log.aksi?.toUpperCase() === "TAMBAH" || log.aksi?.toUpperCase() === "BUAT")
+                            ? "bg-green-100 text-green-700"
+                            : log.aksi?.toUpperCase() === "HAPUS"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-blue-100 text-blue-700"
+                        }`}
                       >
                         {log.aksi}
                       </span>

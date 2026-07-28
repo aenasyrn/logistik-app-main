@@ -41,7 +41,7 @@ class ComputerController extends Controller
             'penyedia' => 'nullable|string',
             'status' => 'nullable|string',
             'kondisi' => 'nullable|string',
-            'deskripsi' => 'nullable|string',
+            'keterangan' => 'nullable|string',
         ]);
 
         $computer = Computer::create($data);
@@ -76,7 +76,7 @@ class ComputerController extends Controller
             'penyedia' => 'nullable|string',
             'status' => 'nullable|string',
             'kondisi' => 'nullable|string',
-            'deskripsi' => 'nullable|string',
+            'keterangan' => 'nullable|string',
         ]);
 
         $computer = Computer::findOrFail($id);
@@ -117,41 +117,63 @@ class ComputerController extends Controller
         $rows = $request->input('rows');
         $importedCount = 0;
 
-        DB::transaction(function () use ($rows, &$importedCount) {
+        $existingOutlets = \App\Models\Outlet::pluck('id')->toArray();
+        $existingOutletsMap = array_combine($existingOutlets, $existingOutlets);
+
+        $existingComputers = \App\Models\Computer::all()->keyBy('sn');
+
+        DB::transaction(function () use ($rows, &$importedCount, &$existingOutletsMap, &$existingComputers) {
             foreach ($rows as $row) {
                 if (empty($row['sn'])) {
                     continue;
                 }
 
                 $outletId = !empty($row['outlet_id']) ? intval($row['outlet_id']) : null;
-                if ($outletId && !Outlet::where('id', $outletId)->exists()) {
-                    Outlet::create([
+                if ($outletId && !isset($existingOutletsMap[$outletId])) {
+                    \App\Models\Outlet::create([
                         'id' => $outletId,
                         'code' => (string) $outletId,
                         'nama' => $row['outlet'] ?? 'Outlet Baru',
                     ]);
+                    $existingOutletsMap[$outletId] = $outletId;
                 }
 
-                Computer::updateOrCreate(
-                    ['sn' => $row['sn']],
-                    [
-                        'outlet_id' => $outletId,
-                        'outlet' => $row['outlet'] ?? null,
-                        'ip_address' => $row['ip_address'] ?? null,
-                        'mac_address' => $row['mac_address'] ?? null,
-                        'ram' => $row['ram'] ?? null,
-                        'storage' => $row['storage'] ?? null,
-                        'cpu' => $row['cpu'] ?? null,
-                        'os' => $row['os'] ?? null,
-                        'produk' => $row['produk'] ?? null,
-                        'tanggal_mulai' => !empty($row['tanggal_mulai']) ? $row['tanggal_mulai'] : null,
-                        'tanggal_selesai' => !empty($row['tanggal_selesai']) ? $row['tanggal_selesai'] : null,
-                        'penyedia' => $row['penyedia'] ?? null,
-                        'status' => $row['status'] ?? 'Inventaris',
-                        'kondisi' => $row['kondisi'] ?? 'BAIK',
-                        'deskripsi' => $row['deskripsi'] ?? null,
-                    ]
-                );
+                $sn = trim($row['sn']);
+                $comp = isset($existingComputers[$sn]) ? $existingComputers[$sn] : null;
+
+                $data = [
+                    'outlet_id' => $outletId,
+                    'outlet' => $row['outlet'] ?? null,
+                    'ip_address' => $row['ip_address'] ?? null,
+                    'mac_address' => $row['mac_address'] ?? null,
+                    'ram' => $row['ram'] ?? null,
+                    'storage' => $row['storage'] ?? null,
+                    'cpu' => $row['cpu'] ?? null,
+                    'os' => $row['os'] ?? null,
+                    'produk' => $row['produk'] ?? null,
+                    'tanggal_mulai' => !empty($row['tanggal_mulai']) ? $row['tanggal_mulai'] : null,
+                    'tanggal_selesai' => !empty($row['tanggal_selesai']) ? $row['tanggal_selesai'] : null,
+                    'penyedia' => $row['penyedia'] ?? null,
+                    'status' => $row['status'] ?? 'Inventaris',
+                    'kondisi' => $row['kondisi'] ?? 'BAIK',
+                    'keterangan' => $row['keterangan'] ?? null,
+                ];
+
+                if ($comp) {
+                    $changed = false;
+                    foreach ($data as $key => $val) {
+                        if ($comp->{$key} !== $val) {
+                            $comp->{$key} = $val;
+                            $changed = true;
+                        }
+                    }
+                    if ($changed) {
+                        $comp->save();
+                    }
+                } else {
+                    $comp = \App\Models\Computer::create(array_merge(['sn' => $sn], $data));
+                    $existingComputers[$sn] = $comp;
+                }
                 $importedCount++;
             }
         });

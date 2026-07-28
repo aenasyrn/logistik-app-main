@@ -64,10 +64,29 @@ const formatPersentase = (nilai) => {
   return `${rounded.toLocaleString("id-ID")}%`;
 };
 
-export default function Renovasi({ userRole, renovations = [] }) {
+export default function Renovasi({ userRole, renovations = [], renovationFilter = "", setRenovationFilter }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
   const searchTimeoutRef = useRef(null);
+
+  React.useEffect(() => {
+    if (renovationFilter === "") {
+      setSearchQuery("");
+      setInputValue("");
+      setStatusGedungFilter("");
+    }
+  }, [renovationFilter]);
+
+  React.useEffect(() => {
+    const handleReset = () => {
+      setSearchQuery("");
+      setInputValue("");
+      setStatusGedungFilter("");
+      setCurrentPage(1);
+    };
+    window.addEventListener("reset-all-filters", handleReset);
+    return () => window.removeEventListener("reset-all-filters", handleReset);
+  }, []);
 
   const handleSearchChange = (val) => {
     setInputValue(val);
@@ -242,11 +261,13 @@ export default function Renovasi({ userRole, renovations = [] }) {
 
     let bgClass = "";
     if (isSelected) {
-      bgClass = isHovered ? "bg-blue-200 text-blue-950" : "bg-blue-100 text-blue-900";
+      bgClass = isHovered 
+        ? "bg-blue-200 text-blue-950 dark:bg-[#2e4c37] dark:text-[#f1f5f3]" 
+        : "bg-blue-100 text-blue-900 dark:bg-[#1f3526] dark:text-[#48a359]";
     } else if (isHovered) {
-      bgClass = "bg-slate-200 text-gray-900";
+      bgClass = "bg-slate-200 text-gray-900 dark:bg-[#273f2f] dark:text-[#f1f5f3]";
     } else {
-      bgClass = isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800";
+      bgClass = isEven ? "bg-slate-100 text-gray-800 dark:bg-[#213527] dark:text-[#d1dcd4]" : "bg-white text-gray-800 dark:bg-[#1a2b20] dark:text-[#d1dcd4]";
     }
 
     // Filter out cell-specific background overrides if row is active (selected or hovered)
@@ -596,6 +617,23 @@ export default function Renovasi({ userRole, renovations = [] }) {
                   </select>
                   <span>entries</span>
                 </div>
+
+                {/* Reset Filters button if any filter active */}
+                {(statusGedungFilter !== "" || inputValue !== "" || searchQuery !== "") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setInputValue("");
+                      setStatusGedungFilter("");
+                      setCurrentPage(1);
+                      if (setRenovationFilter) setRenovationFilter("");
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 cursor-pointer"
+                  >
+                    Reset Filter
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
@@ -694,7 +732,7 @@ export default function Renovasi({ userRole, renovations = [] }) {
                       onClick={() => setSelectedId((prev) => (prev === item.id ? null : item.id))}
                       className="transition-colors duration-150"
                     >
-                      <td className={getCellClass(item, "text-center font-semibold text-gray-500 bg-white/70")}>{startIndex + index + 1}</td>
+                      <td className={getCellClass(item, "text-center font-semibold bg-white/70")}>{startIndex + index + 1}</td>
                       <td className={getCellClass(item, "font-semibold text-gray-900")}>{item.no_memo || "-"}</td>
                       <td className={getCellClass(item, "text-center")}>{formatDate(item.tgl_memo)}</td>
                       <td className={getCellClass(item, "font-semibold text-gray-900")}>{item.nama_pekerjaan}</td>
@@ -1187,7 +1225,7 @@ export default function Renovasi({ userRole, renovations = [] }) {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSaving}
-                  className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium text-sm transition-colors"
+                  className="px-5 py-2.5 text-gray-600 dark:text-[#a4b4a9] hover:bg-gray-100 dark:hover:bg-[#243e2e] dark:hover:text-white rounded-xl font-medium text-sm transition-colors"
                 >
                   Batal
                 </button>

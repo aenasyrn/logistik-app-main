@@ -5,7 +5,7 @@ import React from "react";
 import {
   Map, Key, Hammer, Clock, ArrowRight, Shield,
   CheckCircle2, AlertTriangle, FileText, Handshake,
-  BarChart3, TrendingUp
+  BarChart3, TrendingUp, Loader2, CheckCircle
 } from "lucide-react";
 import axios from "axios";
 import { router } from "@inertiajs/react";
@@ -23,6 +23,10 @@ export default function BuildingDashboardView({
   const [selectedYear, setSelectedYear] = React.useState(() => String(new Date().getFullYear()));
   const [hoveredTrendIdx, setHoveredTrendIdx] = React.useState(null);
   const [hoveredShgbTrendIdx, setHoveredShgbTrendIdx] = React.useState(null);
+  const [confirmItem, setConfirmItem] = React.useState(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [toastMessage, setToastMessage] = React.useState("");
+  const [showSuccessToast, setShowSuccessToast] = React.useState(false);
 
   // Generate list of available years from data
   const availableYears = React.useMemo(() => {
@@ -71,6 +75,7 @@ export default function BuildingDashboardView({
   // Helper to determine status info for sewa contracts
   const getStatusInfo = (sewa) => {
     if (sewa.status === "Done" || sewa.status === "Selesai") return "Selesai";
+    if (sewa.status === "Sewa Habis" || sewa.status === "Expired") return "Sewa Habis";
     const tglAkhir = sewa.tgl_kontrak_berakhir || sewa.tanggal_kontrak_berakhir;
     if (!tglAkhir) return "Aktif";
     const hariIni = new Date();
@@ -78,7 +83,7 @@ export default function BuildingDashboardView({
     const tglSelesai = new Date(tglAkhir);
     tglSelesai.setHours(0, 0, 0, 0);
 
-    if (tglSelesai < hariIni) return "Expired";
+    if (tglSelesai < hariIni) return "Sewa Habis";
 
     const diffTime = tglSelesai.getTime() - hariIni.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -154,23 +159,47 @@ export default function BuildingDashboardView({
     .sort((a, b) => a.sisaHari - b.sisaHari);
 
   // Handlers to mark items as Done
-  const handleMarkLandAsDone = async (id) => {
-    try {
-      await axios.put(`/building-lands/${id}/status`, { status: "Done" });
-      router.reload({ only: ["buildingLands"] });
-    } catch (error) {
-      console.error("Gagal memperbarui status tanah:", error);
-      alert("Gagal memperbarui status tanah");
-    }
+  const handleMarkLandAsDoneClick = (item) => {
+    setConfirmItem({
+      id: item.id,
+      type: "tanah",
+      title: item.unit_kerja || "Aset Tanah",
+    });
   };
 
-  const handleMarkSewaAsDone = async (id) => {
+  const handleMarkSewaAsDoneClick = (item) => {
+    setConfirmItem({
+      id: item.id,
+      type: "sewa",
+      title: item.nama_outlet || "Sewa Bangunan",
+    });
+  };
+
+  const handleConfirmMarkAsDone = async () => {
+    if (!confirmItem) return;
+    setIsSaving(true);
     try {
-      await axios.put(`/building-sewas/${id}/status`, { status: "Done" });
-      router.reload({ only: ["buildingSewas"] });
+      if (confirmItem.type === "tanah") {
+        await axios.put(`/building-lands/${confirmItem.id}/status`, { status: "Done" });
+        router.reload({ only: ["buildingLands"] });
+      } else if (confirmItem.type === "sewa") {
+        await axios.put(`/building-sewas/${confirmItem.id}/status`, { status: "Done" });
+        router.reload({ only: ["buildingSewas"] });
+      }
+
+      // Show success toast notification
+      setToastMessage(`"${confirmItem.title}" berhasil ditandai selesai!`);
+      setShowSuccessToast(true);
+      setTimeout(() => {
+        setShowSuccessToast(false);
+      }, 4000);
+
+      setConfirmItem(null);
     } catch (error) {
-      console.error("Gagal memperbarui status sewa:", error);
-      alert("Gagal memperbarui status sewa");
+      console.error("Gagal memperbarui status:", error);
+      alert("Gagal memperbarui status");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -342,15 +371,15 @@ export default function BuildingDashboardView({
     <div className="space-y-6">
       {/* SECTION 1: NOTIFIKASI TANAH */}
       {alertTanah.length > 0 && (
-        <div className="bg-red-50/80 rounded-xl shadow-sm border border-red-100 overflow-hidden mb-4 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="px-5 py-3 border-b border-red-100/50 flex justify-between items-center gap-3">
+        <div className="bg-red-50/80 alert-card rounded-xl shadow-sm border border-red-100 overflow-hidden mb-4 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="px-5 py-3 border-b border-red-100/50 alert-card-header flex justify-between items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="bg-red-100 p-1.5 rounded-full animate-pulse">
-                <Map className="w-4 h-4 text-red-600" />
+              <div className="bg-red-100 dark:bg-red-950/40 p-1.5 rounded-full animate-pulse">
+                <Map className="w-4 h-4 text-red-600 dark:text-red-450" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-red-800">Perhatian: Masa Berlaku SHGB Tanah Segera Habis!</h3>
-                <p className="text-xs text-red-600 font-medium">Terdapat {alertTanah.length} aset tanah yang mendekati masa habis berlaku SHGB (atau sudah habis).</p>
+                <h3 className="font-bold text-sm text-red-800 dark:text-red-400">Perhatian: Masa Berlaku SHGB Tanah Segera Habis!</h3>
+                <p className="text-xs text-red-600 dark:text-red-300/80 font-medium">Terdapat {alertTanah.length} aset tanah yang mendekati masa habis berlaku SHGB (atau sudah habis).</p>
               </div>
             </div>
             <button
@@ -358,43 +387,36 @@ export default function BuildingDashboardView({
                 if (setLandFilter) setLandFilter("expired");
                 setView("bangunan_tanah");
               }}
-              className="hidden sm:block text-xs font-bold text-red-600 hover:text-red-800 transition-colors bg-white/60 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-white"
+              className="hidden sm:block text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-355 transition-colors bg-white/60 dark:bg-[#2d0f0f]/50 px-3 py-1.5 rounded-lg border border-red-100 dark:border-[#380d0d] hover:bg-white dark:hover:bg-[#2d0f0f]"
             >
               Kelola &rarr;
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="text-red-700 bg-red-100/30 font-medium">
-                <tr>
+            <table className="w-full text-left text-xs whitespace-nowrap alert-table">
+              <thead className="text-red-700 dark:text-red-400 bg-red-100/30 dark:bg-[#2b0b0b] font-medium">
+                <tr className="dark:border-b dark:border-[#380d0d]">
                   <th className="px-5 py-2.5">Unit Kerja</th>
                   <th className="px-5 py-2.5">Peruntukan</th>
                   <th className="px-5 py-2.5">No. SHGB</th>
                   <th className="px-5 py-2.5 text-right">Tanggal Berakhir</th>
                   <th className="px-5 py-2.5 text-right">Sisa Waktu</th>
-                  <th className="px-5 py-2.5 text-center">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-red-100/50">
+              <tbody className="divide-y divide-red-100/50 dark:divide-[#380d0d]">
                 {alertTanah.slice(0, 3).map((item) => (
-                  <tr key={item.id} className="hover:bg-red-50/50 transition-colors">
-                    <td className="px-5 py-2.5 font-semibold text-red-900">{item.unit_kerja || "-"}</td>
-                    <td className="px-5 py-2.5 text-red-800">{item.peruntukan || "-"}</td>
-                    <td className="px-5 py-2.5 text-red-800 font-mono">{item.no_shgb || "-"}</td>
-                    <td className="px-5 py-2.5 text-right text-red-800">{formatDate(item.tgl_berakhir_shgb)}</td>
+                  <tr key={item.id} className="hover:bg-red-50/50 dark:hover:bg-[#2b0b0b] transition-colors">
+                    <td className="px-5 py-2.5 font-semibold text-red-900 dark:text-red-200">{item.unit_kerja || "-"}</td>
+                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300">{item.peruntukan || "-"}</td>
+                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300 font-mono">{item.no_shgb || "-"}</td>
+                    <td className="px-5 py-2.5 text-right text-red-800 dark:text-red-300">{formatDate(item.tgl_berakhir_shgb)}</td>
                     <td className="px-5 py-2.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 text-red-800" : "bg-red-100 text-red-700"}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
                         <Clock className="w-3 h-3" />
-                        {item.sisaHari < 0 ? "Expired" : `${item.sisaHari} hari`}
+                        {item.sisaHari < 0 
+                          ? (Math.abs(item.sisaHari) <= 30 ? `Habis ${Math.abs(item.sisaHari)} hari` : `Habis ${Math.floor(Math.abs(item.sisaHari)/30)} bln`)
+                          : `${item.sisaHari} hari`}
                       </span>
-                    </td>
-                    <td className="px-5 py-2.5 text-center">
-                      <button
-                        onClick={() => handleMarkLandAsDone(item.id)}
-                        className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold transition-all shadow-sm flex items-center gap-1 mx-auto"
-                      >
-                        Selesai
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -403,7 +425,7 @@ export default function BuildingDashboardView({
           </div>
           {alertTanah.length > 3 && (
             <div
-              className="text-center py-2 bg-red-50 text-xs text-red-600 font-medium border-t border-red-100/50 cursor-pointer hover:bg-red-100 transition-colors"
+              className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
               onClick={() => {
                 if (setLandFilter) setLandFilter("expired");
                 setView("bangunan_tanah");
@@ -413,19 +435,17 @@ export default function BuildingDashboardView({
             </div>
           )}
         </div>
-      )}
-
-      {/* SECTION 2: NOTIFIKASI SEWA */}
+      )}        {/* SECTION 2: NOTIFIKASI SEWA */}
       {alertSewa.length > 0 && (
-        <div className="bg-red-50/80 rounded-xl shadow-sm border border-red-100 overflow-hidden mb-4 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="px-5 py-3 border-b border-red-100/50 flex justify-between items-center gap-3">
+        <div className="bg-red-50/80 alert-card rounded-xl shadow-sm border border-red-100 overflow-hidden mb-4 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="px-5 py-3 border-b border-red-100/50 alert-card-header flex justify-between items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="bg-red-100 p-1.5 rounded-full animate-pulse">
-                <Key className="w-4 h-4 text-red-600" />
+              <div className="bg-red-100 dark:bg-red-950/40 p-1.5 rounded-full animate-pulse">
+                <Key className="w-4 h-4 text-red-600 dark:text-red-450" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-red-800">Perhatian: Masa Kontrak Sewa Bangunan Segera Habis!</h3>
-                <p className="text-xs text-red-600 font-medium">Terdapat {alertSewa.length} sewa bangunan yang mendekati masa habis kontrak.</p>
+                <h3 className="font-bold text-sm text-red-800 dark:text-red-400">Perhatian: Masa Kontrak Sewa Bangunan Segera Habis!</h3>
+                <p className="text-xs text-red-600 dark:text-red-300/80 font-medium">Terdapat {alertSewa.length} sewa bangunan yang mendekati masa habis kontrak.</p>
               </div>
             </div>
             <button
@@ -433,43 +453,36 @@ export default function BuildingDashboardView({
                 if (setSewaFilter) setSewaFilter("expired");
                 setView("bangunan_sewa");
               }}
-              className="hidden sm:block text-xs font-bold text-red-600 hover:text-red-800 transition-colors bg-white/60 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-white"
+              className="hidden sm:block text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-355 transition-colors bg-white/60 dark:bg-[#2d0f0f]/50 px-3 py-1.5 rounded-lg border border-red-100 dark:border-[#380d0d] hover:bg-white dark:hover:bg-[#2d0f0f]"
             >
               Kelola &rarr;
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="text-red-700 bg-red-100/30 font-medium">
-                <tr>
+            <table className="w-full text-left text-xs whitespace-nowrap alert-table">
+              <thead className="text-red-700 dark:text-red-400 bg-red-100/30 dark:bg-[#2b0b0b] font-medium">
+                <tr className="dark:border-b dark:border-[#380d0d]">
                   <th className="px-5 py-2.5">Nama Outlet</th>
                   <th className="px-5 py-2.5">Type Bangunan</th>
                   <th className="px-5 py-2.5">Periode Sewa</th>
                   <th className="px-5 py-2.5 text-right">Tanggal Berakhir</th>
                   <th className="px-5 py-2.5 text-right">Sisa Waktu</th>
-                  <th className="px-5 py-2.5 text-center">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-red-100/50">
+              <tbody className="divide-y divide-red-100/50 dark:divide-[#380d0d]">
                 {alertSewa.slice(0, 3).map((item) => (
-                  <tr key={item.id} className="hover:bg-red-50/50 transition-colors">
-                    <td className="px-5 py-2.5 font-semibold text-red-900">{item.nama_outlet || "-"}</td>
-                    <td className="px-5 py-2.5 text-red-800">{item.type_bangunan || "-"}</td>
-                    <td className="px-5 py-2.5 text-red-800 font-medium">{item.periode_sewa || "-"}</td>
-                    <td className="px-5 py-2.5 text-right text-red-800">{formatDate(item.tglAkhir)}</td>
+                  <tr key={item.id} className="hover:bg-red-50/50 dark:hover:bg-[#2b0b0b] transition-colors">
+                    <td className="px-5 py-2.5 font-semibold text-red-900 dark:text-red-200">{item.nama_outlet || "-"}</td>
+                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300">{item.type_bangunan || "-"}</td>
+                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300 font-medium">{item.periode_sewa || "-"}</td>
+                    <td className="px-5 py-2.5 text-right text-red-800 dark:text-red-300">{formatDate(item.tglAkhir)}</td>
                     <td className="px-5 py-2.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 text-red-800" : "bg-red-100 text-red-700"}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
                         <Clock className="w-3 h-3" />
-                        {item.sisaHari < 0 ? "Expired" : `${item.sisaHari} hari`}
+                        {item.sisaHari < 0 
+                          ? (Math.abs(item.sisaHari) <= 30 ? `Sewa Habis (${Math.abs(item.sisaHari)} hari)` : `Sewa Habis (${Math.floor(Math.abs(item.sisaHari)/30)} bln)`)
+                          : `${item.sisaHari} hari`}
                       </span>
-                    </td>
-                    <td className="px-5 py-2.5 text-center">
-                      <button
-                        onClick={() => handleMarkSewaAsDone(item.id)}
-                        className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold transition-all shadow-sm flex items-center gap-1 mx-auto"
-                      >
-                        Selesai
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -478,7 +491,7 @@ export default function BuildingDashboardView({
           </div>
           {alertSewa.length > 3 && (
             <div
-              className="text-center py-2 bg-red-50 text-xs text-red-600 font-medium border-t border-red-100/50 cursor-pointer hover:bg-red-100 transition-colors"
+              className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
               onClick={() => {
                 if (setSewaFilter) setSewaFilter("expired");
                 setView("bangunan_sewa");
@@ -508,8 +521,12 @@ export default function BuildingDashboardView({
                 <h3 className="font-bold text-sm text-gray-800">Daftar Tanah Terbaru</h3>
               </div>
               <button
-                onClick={() => setView("bangunan_tanah")}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                onClick={() => {
+                  if (setLandFilter) setLandFilter("");
+                  setView("bangunan_tanah");
+                  window.scrollTo(0, 0);
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 Lihat Selengkapnya &rarr;
               </button>
@@ -575,8 +592,12 @@ export default function BuildingDashboardView({
                 <h3 className="font-bold text-sm text-gray-800">Sewa Bangunan Terbaru</h3>
               </div>
               <button
-                onClick={() => setView("bangunan_sewa")}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                onClick={() => {
+                  if (setSewaFilter) setSewaFilter("");
+                  setView("bangunan_sewa");
+                  window.scrollTo(0, 0);
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 Lihat Selengkapnya &rarr;
               </button>
@@ -639,8 +660,11 @@ export default function BuildingDashboardView({
                 <h3 className="font-bold text-sm text-gray-800">Renovasi Gedung Terbaru</h3>
               </div>
               <button
-                onClick={() => setView("bangunan_renovasi")}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                onClick={() => {
+                  setView("bangunan_renovasi");
+                  window.scrollTo(0, 0);
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 Lihat Selengkapnya &rarr;
               </button>
@@ -693,7 +717,13 @@ export default function BuildingDashboardView({
             <h3 className="text-base font-bold text-gray-800 mb-4">Daftar Tanah</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Active Asset Card */}
-              <div className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs">
+              <div
+                onClick={() => {
+                  if (setLandFilter) setLandFilter("active");
+                  setView("bangunan_tanah");
+                }}
+                className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-green-800 font-bold">Aset Aktif</span>
                   <div className="p-2 bg-white text-green-600 rounded-lg shadow-3xs border border-green-100">
@@ -704,9 +734,15 @@ export default function BuildingDashboardView({
               </div>
 
               {/* SHGB Expiring Card */}
-              <div className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs">
+              <div
+                onClick={() => {
+                  if (setLandFilter) setLandFilter("6months");
+                  setView("bangunan_tanah");
+                }}
+                className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-red-800 font-bold">Sertifikat &lt; 6 Bln</span>
+                  <span className="text-xs text-red-800 font-bold">Sertifikat &lt; 6 Bln (atau sudah habis).</span>
                   <div className="p-2 bg-white text-red-500 rounded-lg shadow-3xs border border-red-100">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
@@ -721,7 +757,13 @@ export default function BuildingDashboardView({
             <h3 className="text-base font-bold text-gray-800 mb-4">Sewa</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Active Lease Card */}
-              <div className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs">
+              <div
+                onClick={() => {
+                  if (setSewaFilter) setSewaFilter("active");
+                  setView("bangunan_sewa");
+                }}
+                className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-green-800 font-bold">Perjanjian Aktif</span>
                   <div className="p-2 bg-white text-green-600 rounded-lg shadow-3xs border border-green-100">
@@ -732,9 +774,15 @@ export default function BuildingDashboardView({
               </div>
 
               {/* Expiring Lease Card */}
-              <div className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs">
+              <div
+                onClick={() => {
+                  if (setSewaFilter) setSewaFilter("6months");
+                  setView("bangunan_sewa");
+                }}
+                className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-red-800 font-bold">Kontrak &lt; 6 Bln</span>
+                  <span className="text-xs text-red-800 font-bold">Kontrak &lt; 6 Bln (atau sudah Habis).</span>
                   <div className="p-2 bg-white text-red-500 rounded-lg shadow-3xs border border-red-100">
                     <FileText className="w-5 h-5" />
                   </div>
@@ -889,24 +937,24 @@ export default function BuildingDashboardView({
                     {/* Interactive HTML Tooltip inside relative container */}
                     {hoveredShgbTrendIdx !== null && (
                       <div
-                        className="absolute bg-white/95 border border-gray-150 p-2.5 rounded-lg shadow-md pointer-events-none z-20 text-left text-xs min-w-[130px] transition-all duration-100"
+                        className="absolute bg-white/95 dark:bg-[#1a2b20]/95 border border-gray-150 dark:border-[#2b4533] p-2.5 rounded-lg shadow-md pointer-events-none z-20 text-left text-xs min-w-[130px] transition-all duration-100"
                         style={{
                           left: `${(getX(hoveredShgbTrendIdx) / 500) * 100}%`,
                           top: `${(getY(shgbTrendData[hoveredShgbTrendIdx].aktif) / 170) * 100 - 18}%`,
                           transform: 'translate(-50%, -100%)',
                         }}
                       >
-                        <p className="font-extrabold text-gray-700 border-b border-gray-100 pb-1 mb-1.5">
+                        <p className="font-extrabold text-white-1000 dark:text-slate-300 border-b border-gray-100 dark:border-[#2b4533] pb-1 mb-1.5 !bg-transparent">
                           {months[hoveredShgbTrendIdx]} {selectedYear}
                         </p>
-                        <div className="flex items-center justify-between gap-4 text-green-700 font-bold">
+                        <div className="flex items-center justify-between gap-4 text-green-700 dark:text-green-400 font-bold">
                           <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                             Aktif
                           </span>
                           <span>{shgbTrendData[hoveredShgbTrendIdx].aktif}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4 text-red-700 font-bold mt-1">
+                        <div className="flex items-center justify-between gap-4 text-red-700 dark:text-red-400 font-bold mt-1">
                           <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Hampir Habis
@@ -1047,24 +1095,24 @@ export default function BuildingDashboardView({
                     {/* Interactive HTML Tooltip inside relative container */}
                     {hoveredTrendIdx !== null && (
                       <div
-                        className="absolute bg-white/95 border border-gray-150 p-2.5 rounded-lg shadow-md pointer-events-none z-20 text-left text-xs min-w-[130px] transition-all duration-100"
+                        className="absolute bg-white/95 dark:bg-[#1a2b20]/95 border border-gray-150 dark:border-[#2b4533] p-2.5 rounded-lg shadow-md pointer-events-none z-20 text-left text-xs min-w-[130px] transition-all duration-100"
                         style={{
                           left: `${(getX(hoveredTrendIdx) / 500) * 100}%`,
                           top: `${(getY(trendData[hoveredTrendIdx].aktif) / 170) * 100 - 18}%`,
                           transform: 'translate(-50%, -100%)',
                         }}
                       >
-                        <p className="font-extrabold text-gray-700 border-b border-gray-100 pb-1 mb-1.5">
+                        <p className="font-extrabold text-white-1000 dark:text-slate-300 border-b border-gray-100 dark:border-[#2b4533] pb-1 mb-1.5 !bg-transparent">
                           {months[hoveredTrendIdx]} {selectedYear}
                         </p>
-                        <div className="flex items-center justify-between gap-4 text-green-700 font-bold">
+                        <div className="flex items-center justify-between gap-4 text-green-700 dark:text-green-400 font-bold">
                           <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                             Aktif
                           </span>
                           <span>{trendData[hoveredTrendIdx].aktif}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4 text-red-700 font-bold mt-1">
+                        <div className="flex items-center justify-between gap-4 text-red-700 dark:text-red-400 font-bold mt-1">
                           <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Hampir Habis
@@ -1115,6 +1163,57 @@ export default function BuildingDashboardView({
           })}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-[999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white bg-green-600 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span className="font-semibold text-sm">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmItem && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden p-6 animate-in zoom-in-95 duration-200">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-100">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Tandai Selesai</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Apakah Anda yakin ingin menandai <span className="font-semibold text-slate-800">"{confirmItem.title}"</span> sebagai selesai? Tindakan ini akan menghentikan peringatan.
+              </p>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setConfirmItem(null)}
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMarkAsDone}
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  "Ya, Selesai"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
