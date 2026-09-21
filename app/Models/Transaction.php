@@ -26,4 +26,14 @@ class Transaction extends Model
     {
         return $this->hasMany(TransactionItem::class);
     }
+
+    public function printers(): HasMany
+    {
+        return $this->hasMany(Printer::class);
+    }
+
+    public function computers(): HasMany
+    {
+        return $this->hasMany(Computer::class);
+    }
 }

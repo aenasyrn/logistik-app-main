@@ -5,7 +5,10 @@ import { X } from "lucide-react";
 import { VIEW_TITLES, PERMANENT_TABS } from "../../constants/tabConfig";
 
 export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
-  const handleTabClick = (tabId) => setActiveTab(tabId);
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
 
   const closeTab = (e, tabId) => {
     e.stopPropagation();
@@ -26,12 +29,12 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
       top desktop : AppHeader h-20 sticky dari top-0 → top-[80px] = top-20
     */
     <div
-      className="sticky z-20 bg-gray-100 dark:bg-[#0c1410] border-b border-gray-200 dark:border-[#213527] px-4 pt-3 flex gap-1 overflow-x-auto custom-scrollbar print:hidden shrink-0 transition-colors"
+      className="sticky z-20 bg-[#f4faf6] dark:bg-[#061910] border-b border-[#279969]/20 dark:border-[#213527] px-4 pt-2.5 flex gap-1.5 overflow-x-auto custom-scrollbar print:hidden shrink-0 transition-colors"
       style={{ top: "var(--tabbar-top, 128px)" }}
     >
       <style>{`
         :root { --tabbar-top: 64px; }
-        @media (min-width: 768px) { :root { --tabbar-top: 80px; } }
+        @media (min-width: 768px) { :root { --tabbar-top: 64px; } }
       `}</style>
 
       {tabs.map((tab) => (
@@ -40,8 +43,8 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
           onClick={() => handleTabClick(tab.id)}
           className={`group flex items-center gap-2 px-4 py-2 min-w-max border-t border-x rounded-t-xl cursor-pointer transition-all select-none ${
             activeTab === tab.id
-              ? "bg-white dark:bg-[#1a2b20] border-gray-200 dark:border-[#2b4533] text-blue-700 dark:text-[#48a359] font-bold shadow-[0_2px_0_0_white] dark:shadow-[0_2px_0_0_#1a2b20]"
-              : "bg-gray-200/50 dark:bg-[#1a2b20]/40 border-transparent text-gray-500 dark:text-[#86988c] hover:bg-gray-200 dark:hover:bg-[#1a2b20]/85"
+              ? "bg-[#279969]/20 dark:bg-[#279969]/30 border-[#279969]/40 dark:border-[#279969]/50 text-[#0d5c3a] dark:text-emerald-200 font-bold shadow-[0_2px_0_0_#f4faf6] dark:shadow-[0_2px_0_0_#061910]"
+              : "bg-white/70 dark:bg-[#1a2b20]/40 border-gray-200/80 dark:border-transparent text-gray-500 dark:text-[#86988c] hover:bg-white dark:hover:bg-[#1a2b20]/85"
           }`}
         >
           <span className="text-xs">{tab.title}</span>
@@ -50,8 +53,8 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
               onClick={(e) => closeTab(e, tab.id)}
               className={`p-0.5 rounded-md transition-colors ${
                 activeTab === tab.id
-                  ? "hover:bg-blue-100 dark:hover:bg-[#2b4533] text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                  : "hover:bg-gray-300 dark:hover:bg-[#2b4533] text-gray-400 dark:text-[#86988c]"
+                  ? "hover:bg-[#279969]/30 text-[#0d5c3a] hover:text-red-500 dark:text-emerald-200 dark:hover:text-red-400"
+                  : "hover:bg-gray-200 dark:hover:bg-[#2b4533] text-gray-400 dark:text-[#86988c]"
               }`}
             >
               <X className="w-3.5 h-3.5" />

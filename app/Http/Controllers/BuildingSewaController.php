@@ -10,8 +10,26 @@ class BuildingSewaController extends Controller
 {
     private function mergeRequestFields(Request $request)
     {
+        $outletId = $request->input('idOutlet') ?? $request->input('outlet_id');
+        $resolvedOutletId = (is_numeric($outletId) && intval($outletId) > 0) ? intval($outletId) : null;
+        if ($resolvedOutletId && !\App\Models\Outlet::where('id', $resolvedOutletId)->exists()) {
+            $resolvedOutletId = null;
+        }
+
+        $cleanDate = fn($val) => (!empty($val) && $val !== 'null' && $val !== '-') ? $val : null;
+        $cleanNum = fn($val) => (isset($val) && is_numeric($val)) ? $val : null;
+
+        $tglMulai = $request->input('tgl_kontrak_mulai') ?? $request->input('tanggal_kontrak_mulai') ?? $request->input('tanggalKontrakMulai') ?? $request->input('tanggal_mulai');
+        $tglBerakhir = $request->input('tgl_kontrak_berakhir') ?? $request->input('tanggal_kontrak_berakhir') ?? $request->input('tanggalKontrakBerakhir') ?? $request->input('tanggal_selesai');
+
+        $hargaSewa = $request->input('harga_sewa') ?? $request->input('hargaSewa');
+        if (is_string($hargaSewa)) {
+            $cleanedStr = preg_replace('/[^0-9]/', '', $hargaSewa);
+            $hargaSewa = $cleanedStr !== '' ? intval($cleanedStr) : null;
+        }
+
         $request->merge([
-            'outlet_id' => $request->input('idOutlet') ?? $request->input('outlet_id'),
+            'outlet_id' => $resolvedOutletId,
             'kode_outlet' => $request->input('kode_outlet') ?? $request->input('kodeOutlet'),
             'nama_outlet' => $request->input('nama_outlet') ?? $request->input('namaOutlet') ?? $request->input('outlet'),
             'type_outlet' => $request->input('type_outlet') ?? $request->input('typeOutlet'),
@@ -19,16 +37,16 @@ class BuildingSewaController extends Controller
             'jenis_sto' => $request->input('jenis_sto') ?? $request->input('jenisSto'),
             'status_gedung' => $request->input('status_gedung') ?? $request->input('statusGedung'),
             'periode_sewa' => $request->input('periode_sewa') ?? $request->input('periodeSewa'),
-            'tgl_kontrak_mulai' => $request->input('tgl_kontrak_mulai') ?? $request->input('tanggal_kontrak_mulai') ?? $request->input('tanggalKontrakMulai') ?? $request->input('tanggal_mulai'),
-            'tgl_kontrak_berakhir' => $request->input('tgl_kontrak_berakhir') ?? $request->input('tanggal_kontrak_berakhir') ?? $request->input('tanggalKontrakBerakhir') ?? $request->input('tanggal_selesai'),
-            'harga_sewa' => $request->input('harga_sewa') ?? $request->input('hargaSewa'),
+            'tgl_kontrak_mulai' => $cleanDate($tglMulai),
+            'tgl_kontrak_berakhir' => $cleanDate($tglBerakhir),
+            'harga_sewa' => $cleanNum($hargaSewa),
             'keterangan' => $request->input('keterangan') ?? $request->input('deskripsi'),
             'alamat' => $request->input('alamat'),
             'kelurahan' => $request->input('kelurahan'),
             'kecamatan' => $request->input('kecamatan'),
             'kab_kota' => $request->input('kab_kota') ?? $request->input('kabKota'),
             'provinsi' => $request->input('provinsi'),
-            'status' => $request->input('status'),
+            'status' => $request->input('status') ?? 'Aktif',
         ]);
     }
 
@@ -95,11 +113,27 @@ class BuildingSewaController extends Controller
                 'status' => 'nullable|string|max:50',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+
             \Illuminate\Support\Facades\Log::error('Validation failed during sewa update: ' . json_encode($e->errors()));
             throw $e;
         }
 
         $sewa = BuildingSewa::findOrFail($id);
+
+        $modeEdit = $request->input('mode_edit', 'koreksi');
+
+        if ($modeEdit === 'perpanjang') {
+            $sewa->histories()->create([
+                'tgl_mulai' => $sewa->tgl_kontrak_mulai,
+                'tgl_selesai' => $sewa->tgl_kontrak_berakhir,
+                'periode' => $sewa->periode_sewa,
+                'biaya' => $sewa->harga_sewa,
+                'status' => $sewa->status,
+                'keterangan' => $sewa->keterangan,
+                'user_email' => auth()->user()->email ?? null,
+            ]);
+        }
+
         $sewa->update($data);
 
         ActivityLog::create([
@@ -144,13 +178,26 @@ class BuildingSewaController extends Controller
                 }
 
                 $outletId = !empty($row['outlet_id']) ? intval($row['outlet_id']) : null;
-                if ($outletId && !\App\Models\Outlet::where('id', $outletId)->exists()) {
-                    \App\Models\Outlet::create([
-                        'id' => $outletId,
-                        'code' => $row['kode_outlet'] ?? (string) $outletId,
-                        'nama' => $row['nama_outlet'] ?? 'Outlet Baru',
-                        'alamat' => $row['alamat'] ?? null,
-                    ]);
+                if (!$outletId && !empty($row['kode_outlet'])) {
+                    $outlet = \App\Models\Outlet::where('code', $row['kode_outlet'])->first();
+                    if ($outlet) {
+                        $outletId = $outlet->id;
+                    }
+                }
+                if (!$outletId && !empty($row['nama_outlet'])) {
+                    $outlet = \App\Models\Outlet::where('nama', $row['nama_outlet'])->first();
+                    if ($outlet) {
+                        $outletId = $outlet->id;
+                    }
+                }
+
+                if (!$outletId && !empty($row['nama_outlet'])) {
+                    $newOutlet = new \App\Models\Outlet();
+                    $newOutlet->code = $row['kode_outlet'] ?? substr(md5($row['nama_outlet']), 0, 8);
+                    $newOutlet->nama = $row['nama_outlet'];
+                    $newOutlet->alamat = $row['alamat'] ?? null;
+                    $newOutlet->save();
+                    $outletId = $newOutlet->id;
                 }
 
                 $existing = null;

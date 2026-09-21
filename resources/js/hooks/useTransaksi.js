@@ -56,10 +56,11 @@ export function useTransaksi({
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        let updated = { ...item, [field]: value };
-        if (field === "nama") {
-          const found = inventory.find((i) => i.nama === value);
-          if (found) updated.satuan = found.satuan;
+        let updated = typeof field === "object" ? { ...item, ...field } : { ...item, [field]: value };
+        const checkNama = typeof field === "object" ? field.nama : (field === "nama" ? value : null);
+        if (checkNama) {
+          const found = inventory.find((i) => i.nama === checkNama);
+          if (found && found.satuan) updated.satuan = found.satuan;
         }
         return updated;
       })
@@ -72,6 +73,24 @@ export function useTransaksi({
   // ── Simpan transaksi ───────────────────────────────────────────────────
   const handleSaveTransaction = async () => {
     if (isSaving) return;
+
+    // Pengecekan Duplikat Nomor Surat
+    const isDuplicate = Boolean(
+      formData.nomorSurat &&
+        (transactions || []).some(
+          (t) =>
+            (t.nomor_surat || t.nomorSurat)?.trim().toLowerCase() === formData.nomorSurat?.trim().toLowerCase() &&
+            t.id !== activeTransaction?.id
+        )
+    );
+
+    if (isDuplicate) {
+      if (showNotif) {
+        showNotif(`Nomor surat "${formData.nomorSurat}" sudah digunakan pada transaksi lain!`, "error");
+      }
+      return;
+    }
+
     setIsSaving(true);
     const startTime = Date.now();
     try {
@@ -96,7 +115,8 @@ export function useTransaksi({
           sn: item.sn || null,
           keterangan: item.keterangan || null,
           outlet_id: item.outlet_id || null,
-          outlet: item.outlet || null
+          outlet: item.outlet || null,
+          vendor: item.vendor || null,
         }))
       };
 
@@ -119,18 +139,13 @@ export function useTransaksi({
         setActiveTransaction(savedTrx);
         localStorage.setItem("riwayat_active_tab", "serah_terima");
         localStorage.setItem("show_trx_success_toast", "true");
-        
-        // Enforce a minimum 6-second delay to match SOPP timing
-        const elapsedTime = Date.now() - startTime;
-        const remainingTime = Math.max(0, 6000 - elapsedTime);
-        await new Promise((resolve) => setTimeout(resolve, remainingTime));
 
         // Navigate immediately so user doesn't get stuck in loading state
         navigateTo("riwayat");
 
         // Sync states completely in the background
         router.reload({ 
-          only: ['transactions', 'inventory', 'activityLogs'],
+          only: ['transactions', 'inventory', 'masterMeubelairs', 'meubelairs', 'computers', 'printers', 'activityLogs'],
           showProgress: false
         });
       } else {

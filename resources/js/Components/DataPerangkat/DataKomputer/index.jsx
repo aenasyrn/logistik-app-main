@@ -14,7 +14,12 @@ import QrLabelModal         from "./QrLabelModal";
 import ConfirmDeleteModal   from "../../Modal/ConfirmDeleteModal";
 import ToastNotif           from "../../Modal/ToastNotif";
 
-export default function DataKomputer({ userRole, computers, outlets, inventory, filterStatus: propFilterStatus, setFilterStatus: propSetFilterStatus }) {
+export default function DataKomputer({
+  userRole, computers, outlets, inventory, vendors = [],
+  filterStatus: propFilterStatus, setFilterStatus: propSetFilterStatus,
+  computerSearch, setComputerSearch,
+  onNavigateToMasterBarang, setView,
+}) {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
 
   const {
@@ -22,7 +27,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
     openModalForAdd, koneksiError,
     searchQuery, handleSearch, filterStatus, handleFilterStatus, resetFilters,
     isLoading, paginatedData, filteredData,
-    currentPage, totalPages, startIndex, itemsPerPage, setCurrentPage,
+    currentPage, totalPages, startIndex, itemsPerPage, setItemsPerPage, setCurrentPage,
     openModalForEdit, handleDelete,
     setQrModalData, notif, setNotif,
     isModalOpen, setIsModalOpen,
@@ -30,7 +35,25 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
     outletsList, inventoryList,
     handleSave, handleOutletChange, handleProdukChange, handleDateChange,
     qrModalData, exportToExcel,
-  } = useKomputerData(computers, outlets, inventory, propFilterStatus, propSetFilterStatus);
+  } = useKomputerData(computers, outlets, inventory, propFilterStatus, propSetFilterStatus, computerSearch, setComputerSearch);
+
+  const handleNavigateToMaster = (compItem, matchedInv) => {
+    if (onNavigateToMasterBarang) {
+      onNavigateToMasterBarang(compItem, matchedInv);
+    } else if (setView) {
+      setView("master_barang_non_meubelair");
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("open-perpanjang-barang", {
+            detail: {
+              id: matchedInv?.id || compItem?.inventory_id,
+              nama: matchedInv?.nama || compItem?.produk,
+            },
+          })
+        );
+      }, 100);
+    }
+  };
 
   // Tampilkan konfirmasi sebelum hapus
   const askDelete = (id, nama) => setDeleteConfirm({ show: true, id, name: nama });
@@ -48,7 +71,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-              <Monitor className="w-6 h-6 text-blue-600" /> Manajemen Data Komputer
+              <Monitor className="w-6 h-6 text-[#0d5c3a] dark:text-emerald-400" /> Manajemen Data Komputer
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               Kelola spesifikasi, jaringan, dan masa sewa perangkat komputer outlet.
@@ -60,25 +83,25 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
               type="button"
               onClick={exportToExcel}
               disabled={filteredData.length === 0}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+              className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] disabled:bg-[#279969]/50 text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-            {userRole === "admin" && (
+            {userRole !== "guest" && (
               <>
                 <button type="button" onClick={downloadTemplate}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm">
-                  <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                  className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer">
+                  <FileSpreadsheet className="w-4 h-4" /> Template Excel
                 </button>
 
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving}
                   className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50">
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Import CSV
+                  Import Excel
                 </button>
 
-                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload}
-                  className="hidden" aria-label="Upload file CSV data komputer" />
+                <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} onChange={handleFileUpload}
+                  className="hidden" aria-label="Upload file Excel data komputer" />
               </>
             )}
           </div>
@@ -110,7 +133,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
                     value={searchQuery}
                     onChange={handleSearch}
                     aria-label="Cari data komputer"
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-sm"
                   />
                 </div>
 
@@ -123,7 +146,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
                       setItemsPerPage(Number(e.target.value));
                       setCurrentPage(1);
                     }}
-                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-xs cursor-pointer font-medium shadow-sm"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -150,12 +173,12 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
                   <button
                     type="button"
                     onClick={openModalForAdd}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                    className="flex items-center gap-2 bg-[#0d5c3a] hover:bg-[#0a462c] text-white px-5 py-2 rounded-full font-bold shadow-md shadow-[#0d5c3a]/20 transition-all text-xs shrink-0 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah PC
                   </button>
                 )}
-                <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                <div className="bg-emerald-50 text-[#0d5c3a] dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 px-4 py-2 rounded-full text-xs font-bold shrink-0">
                   Total Komputer: {filteredData.length}
                 </div>
               </div>
@@ -171,7 +194,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
                   value={filterStatus}
                   onChange={handleFilterStatus}
                   aria-label="Filter status dan kondisi"
-                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
                 >
                   <option value="Semua">Semua Status & Kondisi</option>
                   {filterStatus === "warning" && (
@@ -206,6 +229,8 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
             onEdit={openModalForEdit}
             onDelete={(id, nama) => askDelete(id, nama)}
             onQr={setQrModalData}
+            inventoryList={inventoryList}
+            onNavigateToMasterBarang={handleNavigateToMaster}
           />
         </div>
       </div>
@@ -219,6 +244,7 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
         isSaving={isSaving}
         outletsList={outletsList}
         inventoryList={inventoryList}
+        vendors={vendors}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
         onOutletChange={handleOutletChange}
@@ -237,6 +263,24 @@ export default function DataKomputer({ userRole, computers, outlets, inventory, 
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm({ show: false, id: null, name: "" })}
       />
+
+      {/* ── Fullscreen Glassmorphic Loading Overlay ── */}
+      {isSaving && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white/95 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 max-w-sm mx-4 border border-slate-100 text-center animate-in zoom-in-95 duration-300">
+            <div className="relative flex items-center justify-center">
+              <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+              <div className="absolute w-12 h-12 rounded-full border-4 border-blue-100 animate-ping opacity-25" />
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-800 text-base">Sedang Memproses Data</h4>
+              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                Harap tunggu beberapa saat. Sistem sedang memproses dan memvalidasi data Anda...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast Notifikasi ── */}
       <ToastNotif

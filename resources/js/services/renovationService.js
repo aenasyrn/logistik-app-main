@@ -1,6 +1,7 @@
 // resources/js/services/renovationService.js
 import axios from 'axios';
 import { router } from '@inertiajs/react';
+import { downloadExcelTemplate } from '../utils/excelHelper';
 
 const parseCsvDate = (dateStr) => {
   if (!dateStr) return null;
@@ -83,14 +84,14 @@ export const importRenovationCSV = async (appId, rows) => {
       retensi_pph: row["RETENSI PPH"]?.trim() ? Number(row["RETENSI PPH"].replace(/[^0-9.]/g, '')) : 0,
       retensi_transfer: row["RETENSI TRANSFER"]?.trim() ? Number(row["RETENSI TRANSFER"].replace(/[^0-9.]/g, '')) : 0,
       status: row["STATUS"]?.trim() || "Dalam Proses",
-      deskripsi: row["DESKRIPSI"]?.trim() || "",
     });
   }
 
   await axios.post('/building-renovations/import', { rows: formattedRows });
-  router.reload({ only: ['buildingRenovations'] });
   return formattedRows.length;
 };
+
+export const importRenovationExcel = importRenovationCSV;
 
 export const downloadRenovationTemplate = () => {
   const headers = [
@@ -99,19 +100,11 @@ export const downloadRenovationTemplate = () => {
     "TGL TAGIHAN", "NILAI SPK PELAKSANAAN", "NILAI ADDENDUM SPK", "TGL SPK", "NO SPK",
     "PAJAK PPH", "TGL BAP BAST", "TAGIHAN NILAI", "TAGIHAN DPP", "TAGIHAN PPN",
     "TAGIHAN PPH", "TAGIHAN RETENSI", "TAGIHAN TRANSFER", "RETENSI NILAI", "RETENSI DPP",
-    "RETENSI PPN", "RETENSI PPH", "RETENSI TRANSFER", "STATUS", "DESKRIPSI"
+    "RETENSI PPN", "RETENSI PPH", "RETENSI TRANSFER", "STATUS"
   ];
   const contoh = [
-    "MEMO-001,2023-08-10,Renovasi Atap KC Palembang,95%,KC Palembang,Palembang,Sewa,1234567890,BRI,CV Karya Mulia,2023-09-01,150000000,10000000,2023-08-15,SPK-001,3000000,2023-08-30,160000000,145454545,14545454,2909090,8000000,149090909,8000000,7272727,727272,145454,7854545,Selesai,Renovasi bocor atap dan perbaikan plafon",
-    "MEMO-002,2023-09-05,Pengecatan Gedung KC Pekanbaru,0.50,KC Pekanbaru,Pekanbaru,Milik Sendiri,0987654321,Mandiri,PT Warna Indah,2023-09-20,50000000,0,2023-09-10,SPK-002,1000000,,50000000,45454545,4545454,909090,2500000,46545454,,,,,,Dalam Proses,"
+    ["MEMO-001", "2023-08-10", "Renovasi Atap KC Palembang", "95%", "KC Palembang", "Palembang", "Sewa", "1234567890", "BRI", "CV Karya Mulia", "2023-09-01", 150000000, 10000000, "2023-08-15", "SPK-001", 3000000, "2023-08-30", 160000000, 145454545, 14545454, 2909090, 8000000, 149090909, 8000000, 7272727, 727272, 145454, 7854545, "Selesai"],
+    ["MEMO-002", "2023-09-05", "Pengecatan Gedung KC Pekanbaru", "0.50", "KC Pekanbaru", "Pekanbaru", "Milik Sendiri", "0987654321", "Mandiri", "PT Warna Indah", "2023-09-20", 50000000, 0, "2023-09-10", "SPK-002", 1000000, "", 50000000, 45454545, 4545454, 909090, 2500000, 46545454, "", "", "", "", "", "Dalam Proses"]
   ];
-  const csv  = headers.join(",") + "\n" + contoh.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.setAttribute("download", "Template_Import_Renovasi.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadExcelTemplate("Template_Import_Renovasi.xlsx", headers, contoh, "Renovasi Gedung");
 };

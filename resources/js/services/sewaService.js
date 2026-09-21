@@ -1,6 +1,7 @@
 // resources/js/services/sewaService.js
 import axios from 'axios';
 import { router } from '@inertiajs/react';
+import { downloadExcelTemplate } from '../utils/excelHelper';
 
 const parseCsvDate = (dateStr) => {
   if (!dateStr) return null;
@@ -37,53 +38,83 @@ export const importSewaCSV = async (appId, rows) => {
 
   const formattedRows = [];
   for (const row of rows) {
-    // Lewati baris kosong
-    if (!row["KODE OUTLET"] && !row["NAMA OUTLET"]) continue;
+    const getVal = (possibleKeys) => {
+      for (const k of possibleKeys) {
+        const cleanK = k.replace(/^\uFEFF/, "").trim().toLowerCase();
+        const match = Object.keys(row).find(key => {
+          const cleanKey = key.replace(/^\uFEFF/, "").trim().toLowerCase();
+          return cleanKey === cleanK;
+        });
+        if (match) return row[match];
+      }
+      return undefined;
+    };
+
+    const kodeOutlet = getVal(["Kode Outlet", "KODE OUTLET"])?.trim() || "";
+    const namaOutlet = getVal(["Nama Outlet", "NAMA OUTLET"])?.trim() || "";
+
+    if (!kodeOutlet && !namaOutlet) continue;
+
+    const typeOutlet = getVal(["Type Outlet", "TYPE OUTLET"])?.trim() || "";
+    const typeBangunan = getVal(["Type Bangunan", "TYPE BANGUNAN"])?.trim() || "";
+    const jenisSto = getVal(["Jenis STO", "JENIS STO"])?.trim() || "";
+    const status = getVal(["Status", "STATUS"])?.trim() || "";
+    const hargaSewaStr = getVal(["Harga Sewa", "HARGA SEWA"]) || "";
+    const hargaSewa = hargaSewaStr ? Number(String(hargaSewaStr).replace(/[^0-9.]/g, '')) : 0;
+    const statusGedung = getVal(["Status Gedung", "STATUS GEDUNG"])?.trim() || "";
+    const periodeSewaRaw = getVal(["Periode Sewa", "PERIODE SEWA"])?.trim() || "";
+    const periodeSewa = periodeSewaRaw ? Number(String(periodeSewaRaw).replace(/[^0-9.]/g, '')) : null;
+
+    const tglMulai = parseCsvDate(getVal(["Tgl. Kontrak Mulai", "TGL KONTRAK MULAI", "Tanggal Kontrak Mulai"]));
+    const tglBerakhir = parseCsvDate(getVal(["Tgl. Kontrak Berakhir", "TGL KONTRAK BERAKHIR", "Tanggal Kontrak Berakhir"]));
+    const keterangan = getVal(["Keterangan", "KETERANGAN"])?.trim() || "";
+    const alamat = getVal(["Alamat", "ALAMAT"])?.trim() || "";
+    const kelurahan = getVal(["Kelurahan", "KELURAHAN"])?.trim() || "";
+    const kecamatan = getVal(["Kecamatan", "KECAMATAN"])?.trim() || "";
+    const kabKota = getVal(["Kab/Kota", "KAB KOTA", "Kabupaten", "Kota"])?.trim() || "";
+    const provinsi = getVal(["Provinsi", "PROVINSI"])?.trim() || "";
 
     formattedRows.push({
-      outlet_id: row["OUTLET ID"]?.trim() ? Number(row["OUTLET ID"]) : null,
-      kode_outlet: row["KODE OUTLET"]?.trim() || "",
-      nama_outlet: row["NAMA OUTLET"]?.trim() || "",
-      type_outlet: row["TYPE OUTLET"]?.trim() || "",
-      type_bangunan: row["TYPE BANGUNAN"]?.trim() || "",
-      jenis_sto: row["JENIS STO"]?.trim() || "",
-      status_gedung: row["STATUS GEDUNG"]?.trim() || "",
-      periode_sewa: row["PERIODE SEWA"]?.trim() || "",
-      tgl_kontrak_mulai: parseCsvDate(row["TGL KONTRAK MULAI"]),
-      tgl_kontrak_berakhir: parseCsvDate(row["TGL KONTRAK BERAKHIR"]),
-      harga_sewa: row["HARGA SEWA"]?.trim() ? Number(row["HARGA SEWA"].replace(/[^0-9.]/g, '')) : 0,
-      keterangan: row["KETERANGAN"]?.trim() || "",
-      alamat: row["ALAMAT"]?.trim() || "",
-      kelurahan: row["KELURAHAN"]?.trim() || "",
-      kecamatan: row["KECAMATAN"]?.trim() || "",
-      kab_kota: row["KAB KOTA"]?.trim() || "",
-      provinsi: row["PROVINSI"]?.trim() || "",
+      kode_outlet: kodeOutlet,
+      nama_outlet: namaOutlet,
+      type_outlet: typeOutlet,
+      type_bangunan: typeBangunan,
+      jenis_sto: jenisSto,
+      status: status,
+      harga_sewa: hargaSewa,
+      status_gedung: statusGedung,
+      periode_sewa: periodeSewa,
+      tgl_kontrak_mulai: tglMulai,
+      tgl_kontrak_berakhir: tglBerakhir,
+      keterangan: keterangan,
+      alamat: alamat,
+      kelurahan: kelurahan,
+      kecamatan: kecamatan,
+      kab_kota: kabKota,
+      provinsi: provinsi,
     });
   }
 
+  if (formattedRows.length === 0) {
+    throw new Error("Tidak ada data valid yang cocok dengan kolom template. Pastikan header CSV sesuai.");
+  }
+
   await axios.post('/building-sewas/import', { rows: formattedRows });
-  router.reload({ only: ['buildingSewas', 'activityLogs', 'outlets'] });
   return formattedRows.length;
 };
 
+export const importSewaExcel = importSewaCSV;
+
 export const downloadSewaTemplate = () => {
   const headers = [
-    "OUTLET ID", "KODE OUTLET", "NAMA OUTLET", "TYPE OUTLET",
-    "TYPE BANGUNAN", "JENIS STO", "STATUS GEDUNG", "PERIODE SEWA",
-    "TGL KONTRAK MULAI", "TGL KONTRAK BERAKHIR", "HARGA SEWA",
-    "KETERANGAN", "ALAMAT", "KELURAHAN", "KECAMATAN", "KAB KOTA", "PROVINSI"
+    "Kode Outlet", "Nama Outlet", "Type Outlet", "Type Bangunan",
+    "Jenis STO", "Sisa Waktu", "Status", "Harga Sewa", "Status Gedung",
+    "Periode Sewa", "Tgl. Kontrak Mulai", "Tgl. Kontrak Berakhir",
+    "Keterangan", "Alamat", "Kelurahan", "Kecamatan", "Kab/Kota", "Provinsi"
   ];
   const contoh = [
-    "10101,10101,KC Palembang,Kanca,Ruko Single,STO A,Sewa,3 Tahun,2023-07-09,2026-07-08,12000000,Sewa bangunan operasional,Jl. Jend. Sudirman No. 12,20 Ilir D III,Ilir Timur I,Palembang,Sumatera Selatan",
-    "10102,10102,KC Pekanbaru,Kanca,Gedung Mandiri,STO B,Sewa,3 Tahun,2023-07-22,2026-07-21,10500000,Sewa bangunan kantor pembantu,Jl. Sudirman No. 45,Simpang Empat,Pekanbaru Kota,Pekanbaru,Riau"
+    ["10101", "KC Palembang", "Kanca", "Ruko Single", "STO A", "-", "Aktif", 12000000, "Sewa", 3, "2023-07-09", "2026-07-08", "Sewa bangunan operasional", "Jl. Jend. Sudirman No. 12", "20 Ilir D III", "Ilir Timur I", "Palembang", "Sumatera Selatan"],
+    ["10102", "KC Pekanbaru", "Kanca", "Gedung Mandiri", "STO B", "-", "Aktif", 10500000, "Sewa", 3, "2023-07-22", "2026-07-21", "Sewa bangunan kantor pembantu", "Jl. Sudirman No. 45", "Simpang Empat", "Pekanbaru Kota", "Pekanbaru", "Riau"]
   ];
-  const csv  = headers.join(",") + "\n" + contoh.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.setAttribute("download", "Template_Import_Sewa.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadExcelTemplate("Template_Import_Sewa.xlsx", headers, contoh, "Sewa Bangunan");
 };

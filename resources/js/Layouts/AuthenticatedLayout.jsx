@@ -4,9 +4,12 @@ import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import useIdleTimeout from '@/hooks/useIdleTimeout';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
+    const userRole = user?.role || 'user';
+    useIdleTimeout(20, userRole !== 'admin');
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);

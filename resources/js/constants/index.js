@@ -5,7 +5,7 @@ export const createInitialFormData = () => ({
   penerimaNama: "",
   penerimaJabatan: "",
   penerimaInstansi: "",
-  pengirimNama: "Ahmad Dendy Syaputra",
+  pengirimNama: "",
   pengirimJabatan: "Staff Pengadaan dan Logistik",
   pengirimInstansi: "",
   mengetahuiNama: "Zoni Rahmawan Putra",
@@ -21,4 +21,5 @@ export const createInitialItem = () => ({
   sn: "",
   keterangan: "",
   outlet: "",
+  vendor: "",
 });

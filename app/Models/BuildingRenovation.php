@@ -10,6 +10,49 @@ class BuildingRenovation extends Model
     protected $guarded = [];
     public $timestamps = false;
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($model) {
+            if (empty($model->outlet_id) && !empty($model->nama_outlet)) {
+                $namaOutlet = trim($model->nama_outlet);
+                $outlet = \App\Models\Outlet::firstOrCreate(
+                    ['nama' => $namaOutlet],
+                    [
+                        'code' => 'OT_' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $namaOutlet), 0, 8)),
+                        'alamat' => $model->cabang ?? null,
+                    ]
+                );
+                $model->outlet_id = $outlet->id;
+            }
+
+            if (!empty($model->outlet_id)) {
+                $outlet = \App\Models\Outlet::find($model->outlet_id);
+                if ($outlet) {
+                    $dirty = false;
+                    if ((empty($outlet->status_gedung) || $outlet->status_gedung === '-') && !empty($model->status_gedung) && $model->status_gedung !== '-') {
+                        $outlet->status_gedung = $model->status_gedung;
+                        $dirty = true;
+                    }
+                    if ((empty($outlet->alamat) || $outlet->alamat === '-') && !empty($model->cabang) && $model->cabang !== '-') {
+                        $outlet->alamat = $model->cabang;
+                        $dirty = true;
+                    }
+                    if ($dirty) {
+                        $outlet->save();
+                    }
+                }
+            }
+        });
+    }
+
+    public function outlet()
+    {
+        return $this->belongsTo(Outlet::class, 'outlet_id');
+    }
+
+
     protected $appends = [
         'tgl_memo',
         'norek',

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { hitungSisaBulan, hitungSisaHari } from "../../utils/deviceUtils";
 
-export function useKomputerFilter(computerData, propFilterStatus, propSetFilterStatus) {
-  const [searchQuery, setSearchQuery]   = useState("");
+export function useKomputerFilter(computerData, propFilterStatus, propSetFilterStatus, propSearchQuery, propSetSearchQuery) {
+  const [searchQuery, setSearchQuery]   = useState(propSearchQuery || "");
   const [filterStatus, setFilterStatus] = useState(propFilterStatus || "Semua");
   const [currentPage, setCurrentPage]   = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -13,6 +13,12 @@ export function useKomputerFilter(computerData, propFilterStatus, propSetFilterS
       setFilterStatus(propFilterStatus);
     }
   }, [propFilterStatus]);
+
+  useEffect(() => {
+    if (propSearchQuery !== undefined) {
+      setSearchQuery(propSearchQuery);
+    }
+  }, [propSearchQuery]);
 
   const handleSearch       = (e) => { setSearchQuery(e.target.value); setCurrentPage(1); };
   const handleFilterStatus = (e) => { 

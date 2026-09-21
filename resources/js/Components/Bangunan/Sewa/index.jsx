@@ -6,7 +6,7 @@ import { Key, Search, Plus, FileSpreadsheet, X, Upload, Loader2 } from "lucide-r
 import axios from "axios";
 import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
-import Papa from "papaparse";
+import { parseExcelFile } from "../../../utils/excelHelper";
 
 import SewaTable, { hitungSisaWaktu, getStatusInfo } from "./SewaTable";
 import SewaModal from "./SewaModal";
@@ -36,8 +36,8 @@ const getDateSearchStrings = (dateString) => {
   return [slashDate.toLowerCase(), isoDate.toLowerCase(), indoDate.toLowerCase(), monthIndo.toLowerCase()];
 };
 
-export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilter = "", setSewaFilter }) {
-  const [searchQuery, setSearchQuery] = useState("");
+export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilter = "", setSewaFilter, sewaSearch = "", setSewaSearch }) {
+  const [searchQuery, setSearchQuery] = useState(sewaSearch || "");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -48,15 +48,22 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
   const [filterOutletCategory, setFilterOutletCategory] = useState("all");
 
   useEffect(() => {
+    if (sewaSearch !== undefined) {
+      setSearchQuery(sewaSearch);
+      setCurrentPage(1);
+    }
+  }, [sewaSearch]);
+
+  useEffect(() => {
     if (sewaFilter === "") {
-      setSearchQuery("");
+      if (!sewaSearch) setSearchQuery("");
       setFilterExpiry("all");
       setFilterTypeOutlet("all");
       setFilterTypeBangunan("all");
       setFilterStatusGedung("all");
       setFilterOutletCategory("all");
     }
-  }, [sewaFilter]);
+  }, [sewaFilter, sewaSearch]);
 
   useEffect(() => {
     const handleReset = () => {
@@ -103,10 +110,10 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
 
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
   const [detailData, setDetailData] = useState(null);
-  const [notif, setNotif] = useState({ show: false, message: "", type: "success" });
+  const [notif, setNotif] = useState({ show: false, message: "", type: "success", onOk: null });
 
-  const showNotif = (message, type = "success") => {
-    setNotif({ show: true, message, type });
+  const showNotif = (message, type = "success", onOk = null) => {
+    setNotif({ show: true, message, type, onOk });
   };
 
   const handleStatusChange = async (id, newStatus) => {
@@ -220,7 +227,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
       if (diffDays > 180 || item.status === "Done" || item.status === "Selesai") return false;
     }
 
-    // 2. Expiry filter (mau habis: sisa waktu <= 30 hari)
+    // 2. Expiry filter (mau habis: sisa waktu <= 30 hari atau < 6 bulan)
     if (filterExpiry === "expiring_30") {
       const targetDate = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
       if (!targetDate) return false;
@@ -233,6 +240,18 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
 
       // Expiring soon: remaining days <= 30 and >= 0 (not expired yet)
       if (diffDays > 30 || diffDays < 0) return false;
+    } else if (filterExpiry === "expiring_180") {
+      const targetDate = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
+      if (!targetDate) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiration = new Date(targetDate);
+      expiration.setHours(0, 0, 0, 0);
+      const diffTime = expiration.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Expiring soon: remaining days <= 180 and >= 0 (not expired yet)
+      if (diffDays > 180 || diffDays < 0) return false;
     }
 
     // 3. Type Outlet filter
@@ -263,13 +282,12 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
         if (!name.startsWith("UPS")) return false;
       }
     }
-
     return true;
   });
 
   // Sort sewas if filter is active
   const sortedSewas = [...filteredSewas].sort((a, b) => {
-    if (sewaFilter === "expired" || sewaFilter === "6months" || filterExpiry === "expiring_30") {
+    if (sewaFilter === "expired" || sewaFilter === "6months" || filterExpiry === "expiring_30" || filterExpiry === "expiring_180") {
       const aDate = a.tgl_kontrak_berakhir || a.tanggal_kontrak_berakhir || a.tanggal_mulai;
       const bDate = b.tgl_kontrak_berakhir || b.tanggal_kontrak_berakhir || b.tanggal_mulai;
       if (!aDate) return 1;
@@ -374,28 +392,44 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
   };
 
   const handleSave = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+
+    const outletName = (formData.nama_outlet || formData.outlet || "").trim();
+    if (!outletName) {
+      showNotif("Nama Outlet / Instansi wajib diisi!", "error");
+      return;
+    }
     setIsSaving(true);
 
+    const resolvedOutletId = (formData.outlet_id && !isNaN(Number(formData.outlet_id)))
+      ? Number(formData.outlet_id)
+      : ((formData.idOutlet && !isNaN(Number(formData.idOutlet))) ? Number(formData.idOutlet) : null);
+
+    const rawHarga = typeof formData.harga_sewa === "string"
+      ? formData.harga_sewa.replace(/[^0-9]/g, "")
+      : formData.harga_sewa;
+
     const payload = {
-      outlet_id: formData.idOutlet || null,
-      kode_outlet: formData.kode_outlet,
-      nama_outlet: formData.nama_outlet || formData.outlet,
-      type_outlet: formData.type_outlet,
-      type_bangunan: formData.type_bangunan,
-      jenis_sto: formData.jenis_sto,
-      status_gedung: formData.status_gedung,
-      periode_sewa: formData.periode_sewa,
-      tgl_kontrak_mulai: formData.tgl_kontrak_mulai || formData.tanggal_kontrak_mulai || formData.tanggal_mulai || "",
-      tgl_kontrak_berakhir: formData.tgl_kontrak_berakhir || formData.tanggal_kontrak_berakhir || formData.tanggal_selesai || "",
-      harga_sewa: Number(formData.harga_sewa) || 0,
-      keterangan: formData.keterangan || formData.deskripsi,
-      alamat: formData.alamat,
-      kelurahan: formData.kelurahan,
-      kecamatan: formData.kecamatan,
-      kab_kota: formData.kab_kota,
-      provinsi: formData.provinsi,
-      status: formData.status,
+      outlet_id: resolvedOutletId,
+      idOutlet: resolvedOutletId,
+      kode_outlet: formData.kode_outlet?.trim() || null,
+      nama_outlet: outletName,
+      type_outlet: formData.type_outlet || null,
+      type_bangunan: formData.type_bangunan || null,
+      jenis_sto: formData.jenis_sto || null,
+      status_gedung: formData.status_gedung || "Sewa",
+      periode_sewa: formData.periode_sewa || null,
+      tgl_kontrak_mulai: formData.tgl_kontrak_mulai || null,
+      tgl_kontrak_berakhir: formData.tgl_kontrak_berakhir || null,
+      harga_sewa: rawHarga !== "" && rawHarga !== null && !isNaN(Number(rawHarga)) ? Number(rawHarga) : null,
+      keterangan: formData.keterangan || null,
+      alamat: formData.alamat || null,
+      kelurahan: formData.kelurahan || null,
+      kecamatan: formData.kecamatan || null,
+      kab_kota: formData.kab_kota || null,
+      provinsi: formData.provinsi || null,
+      status: formData.status || "Aktif",
+      mode_edit: formData.mode_edit || "koreksi",
     };
 
     if (editingId) {
@@ -405,8 +439,14 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
           setIsModalOpen(false);
         },
         onError: (err) => {
-          console.error(err);
-          showNotif("Gagal memperbarui data sewa.", "error");
+          console.error("Update sewa error:", err);
+          const errorMsg =
+            err.response?.data?.message ||
+            (err.response?.data?.errors
+              ? Object.values(err.response.data.errors).flat().join(", ")
+              : null) ||
+            "Gagal memperbarui data sewa.";
+          showNotif(errorMsg, "error");
         },
         onFinish: () => {
           setIsSaving(false);
@@ -419,8 +459,14 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
           setIsModalOpen(false);
         },
         onError: (err) => {
-          console.error(err);
-          showNotif("Gagal menambahkan sewa baru.", "error");
+          console.error("Create sewa error:", err);
+          const errorMsg =
+            err.response?.data?.message ||
+            (err.response?.data?.errors
+              ? Object.values(err.response.data.errors).flat().join(", ")
+              : null) ||
+            "Gagal menambahkan sewa baru.";
+          showNotif(errorMsg, "error");
         },
         onFinish: () => {
           setIsSaving(false);
@@ -464,33 +510,24 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
 
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    showNotif("Sedang memproses dan mengunggah CSV...");
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        try {
-          const total = await importSewaCSV("logistikku_app_01", data);
-          showNotif(`Sukses! ${total} data sewa berhasil di-import. Memuat ulang...`);
-          setTimeout(() => window.location.reload(), 2000);
-        } catch (err) {
-          console.error(err);
-          showNotif("Gagal import! Pastikan kolom header persis seperti template.", "error");
-        } finally {
-          setIsSaving(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-      },
-      error: (err) => {
-        console.error(err);
-        showNotif("Gagal membaca file CSV.", "error");
-        setIsSaving(false);
-      },
-    });
+    try {
+      const data = await parseExcelFile(file);
+      const total = await importSewaCSV("logistikku_app_01", data);
+      showNotif(`Sukses! ${total} data sewa berhasil di-import.`, "success", () => {
+        router.reload({ only: ['buildingSewas', 'activityLogs', 'outlets'] });
+      });
+    } catch (err) {
+      console.error(err);
+      const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan file Excel valid dan kolom header sesuai template.";
+      showNotif(errorMsg, "error");
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -501,7 +538,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 print:hidden">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-              <Key className="w-6 h-6 text-emerald-600" /> Sewa Bangunan
+              <Key className="w-6 h-6 text-[#0d5c3a] dark:text-emerald-400" /> Sewa Bangunan
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               Pantau kontrak, pemilik, biaya, dan masa berakhir sewa bangunan instansi.
@@ -513,18 +550,18 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
               type="button"
               onClick={exportToExcel}
               disabled={filteredSewas.length === 0}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+              className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] disabled:bg-[#279969]/50 text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-            {userRole === "admin" && (
+            {userRole !== "guest" && (
               <>
                 <button
                   type="button"
                   onClick={downloadSewaTemplate}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+                  className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                  <FileSpreadsheet className="w-4 h-4" /> Template Excel
                 </button>
                 <button
                   type="button"
@@ -532,15 +569,15 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
                   disabled={isSaving}
                   className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import CSV
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import Excel
                 </button>
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".xlsx, .xls, .csv"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
                   className="hidden"
-                  aria-label="Upload file CSV data sewa"
+                  aria-label="Upload file Excel data sewa bangunan"
                 />
               </>
             )}
@@ -613,16 +650,16 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
               </div>
 
               <div className="flex items-center gap-3 self-start lg:self-auto shrink-0">
-                {userRole === "admin" && (
+                {userRole !== "guest" && (
                   <button
                     type="button"
                     onClick={openAdd}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                    className="flex items-center gap-2 bg-[#0d5c3a] hover:bg-[#0a462c] text-white px-5 py-2 rounded-full font-bold shadow-md shadow-[#0d5c3a]/20 transition-all text-xs shrink-0 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Sewa
                   </button>
                 )}
-                <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-100 shrink-0">
+                <div className="bg-emerald-50 text-[#0d5c3a] dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 px-4 py-2 rounded-full text-xs font-bold shrink-0">
                   Total Kontrak: {filteredSewas.length}
                 </div>
               </div>
@@ -640,6 +677,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
                 >
                   <option value="all">Semua Masa Sewa</option>
                   <option value="expiring_30">Akan Habis (≤ 30 Hari)</option>
+                  <option value="expiring_180">Akan Habis (&lt; 6 Bulan)</option>
                 </select>
               </div>
 
@@ -792,7 +830,9 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <span className="block text-xs font-medium text-gray-400 uppercase">Kode Outlet</span>
-                  <span className="font-semibold text-gray-900 font-mono text-base">{detailData.kode_outlet || "-"}</span>
+                  <span className="font-semibold text-gray-900 font-mono text-base">
+                    {detailData.kode_outlet && detailData.kode_outlet.startsWith("OT_") ? "-" : detailData.kode_outlet || "-"}
+                  </span>
                 </div>
                 <div>
                   <span className="block text-xs font-medium text-gray-400 uppercase">Nama Outlet / Instansi</span>
@@ -916,7 +956,10 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
         show={notif.show}
         message={notif.message}
         type={notif.type}
-        onClose={() => setNotif({ show: false, message: "", type: "" })}
+        onClose={() => {
+          setNotif({ show: false, message: "", type: "", onOk: null });
+          if (notif.onOk) notif.onOk();
+        }}
       />
     </>
   );

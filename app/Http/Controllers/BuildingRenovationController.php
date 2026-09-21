@@ -10,45 +10,68 @@ class BuildingRenovationController extends Controller
 {
     private function mergeRequestFields(Request $request)
     {
+        $outletId = $request->input('outlet_id') ?? $request->input('idOutlet');
+        $resolvedOutletId = (is_numeric($outletId) && intval($outletId) > 0) ? intval($outletId) : null;
+        if ($resolvedOutletId && !\App\Models\Outlet::where('id', $resolvedOutletId)->exists()) {
+            $resolvedOutletId = null;
+        }
+
+        $cleanDate = fn($val) => (!empty($val) && $val !== 'null' && $val !== '-') ? $val : null;
+        $cleanNum = fn($val) => (isset($val) && is_numeric($val)) ? $val : null;
+
+        $tglMemo = $cleanDate($request->input('tgl_memo') ?? $request->input('tglMemo') ?? $request->input('tanggal_memo') ?? $request->input('tanggalMemo'));
+        $tglTagihan = $cleanDate($request->input('tgl_tagihan') ?? $request->input('tglTagihan') ?? $request->input('tanggal_tagihan') ?? $request->input('tanggalTagihan'));
+        $tglSpk = $cleanDate($request->input('tgl_spk') ?? $request->input('tglSpk') ?? $request->input('tanggal_spk') ?? $request->input('tanggalSpk'));
+        $noSpk = $request->input('no_spk') ?? $request->input('noSpk') ?? $request->input('nomorSpk');
+        if (empty($tglSpk) && !empty($noSpk)) {
+            $matchedSpk = \App\Models\SpkHistory::where('nomor_spk', $noSpk)->first();
+            if ($matchedSpk && !empty($matchedSpk->tanggal)) {
+                $tglSpk = $matchedSpk->tanggal;
+            }
+        }
+        $tglBapBast = $cleanDate($request->input('tgl_bap_bast') ?? $request->input('tglBapBast') ?? $request->input('tanggal_bap_bast') ?? $request->input('tanggalBapBast'));
+
         $request->merge([
+            'outlet_id' => $resolvedOutletId,
             'no_memo' => $request->input('no_memo') ?? $request->input('noMemo'),
-            'tgl_memo' => $request->input('tgl_memo') ?? $request->input('tglMemo') ?? $request->input('tanggal_memo') ?? $request->input('tanggalMemo'),
+            'tgl_memo' => $tglMemo,
             'nama_pekerjaan' => $request->input('nama_pekerjaan') ?? $request->input('namaPekerjaan') ?? $request->input('nama_proyek') ?? $request->input('namaProyek'),
-            'nilai_pembayaran' => $request->input('nilai_pembayaran') ?? $request->input('nilaiPembayaran') ?? $request->input('nilai'),
+            'nilai_pembayaran' => $cleanNum($request->input('nilai_pembayaran') ?? $request->input('nilaiPembayaran') ?? $request->input('nilai')),
             'nama_outlet' => $request->input('nama_outlet') ?? $request->input('namaOutlet') ?? $request->input('lokasi'),
             'cabang' => $request->input('cabang'),
             'norek' => $request->input('norek') ?? $request->input('noRek') ?? $request->input('nomorRekening'),
             'bank' => $request->input('bank'),
             'pelaksana_pekerjaan' => $request->input('pelaksana_pekerjaan') ?? $request->input('pelaksanaPekerjaan') ?? $request->input('kontraktor'),
-            'tgl_tagihan' => $request->input('tgl_tagihan') ?? $request->input('tglTagihan') ?? $request->input('tanggal_tagihan') ?? $request->input('tanggalTagihan'),
-            'nilai_spk_pelaksanaan' => $request->input('nilai_spk_pelaksanaan') ?? $request->input('nilaiSpkPelaksanaan'),
-            'nilai_addendum_spk' => $request->input('nilai_addendum_spk') ?? $request->input('nilaiAddendumSpk'),
-            'tgl_spk' => $request->input('tgl_spk') ?? $request->input('tglSpk') ?? $request->input('tanggal_spk') ?? $request->input('tanggalSpk'),
-            'no_spk' => $request->input('no_spk') ?? $request->input('noSpk') ?? $request->input('nomorSpk'),
-            'pajak_pph' => $request->input('pajak_pph') ?? $request->input('pajakPph'),
-            'tgl_bap_bast' => $request->input('tgl_bap_bast') ?? $request->input('tglBapBast') ?? $request->input('tanggal_bap_bast') ?? $request->input('tanggalBapBast'),
-
-            'tagihan_nilai' => $request->input('tagihan_nilai') ?? $request->input('tagihanNilai'),
-            'tagihan_dpp' => $request->input('tagihan_dpp') ?? $request->input('tagihanDpp'),
-            'tagihan_ppn' => $request->input('tagihan_ppn') ?? $request->input('tagihanPpn'),
-            'tagihan_pph' => $request->input('tagihan_pph') ?? $request->input('tagihanPph'),
-            'tagihan_retensi' => $request->input('tagihan_retensi') ?? $request->input('tagihanRetensi'),
-            'tagihan_transfer' => $request->input('tagihan_transfer') ?? $request->input('tagihanTransfer'),
-
-            'retensi_nilai' => $request->input('retensi_nilai') ?? $request->input('retensiNilai'),
-            'retensi_dpp' => $request->input('retensi_dpp') ?? $request->input('retensiDpp'),
-            'retensi_ppn' => $request->input('retensi_ppn') ?? $request->input('retensiPpn'),
-            'retensi_pph' => $request->input('retensi_pph') ?? $request->input('retensiPph'),
-            'retensi_transfer' => $request->input('retensi_transfer') ?? $request->input('retensiTransfer'),
+            'tgl_tagihan' => $tglTagihan,
+            'nilai_spk_pelaksanaan' => $cleanNum($request->input('nilai_spk_pelaksanaan') ?? $request->input('nilaiSpkPelaksanaan')),
+            'nilai_addendum_spk' => $cleanNum($request->input('nilai_addendum_spk') ?? $request->input('nilaiAddendumSpk')),
+            'tgl_spk' => $tglSpk,
+            'no_spk' => $noSpk,
+            'pajak_pph' => $cleanNum($request->input('pajak_pph') ?? $request->input('pajakPph')),
+            'tgl_bap_bast' => $tglBapBast,
+ 
+            'tagihan_nilai' => $cleanNum($request->input('tagihan_nilai') ?? $request->input('tagihanNilai')),
+            'tagihan_dpp' => $cleanNum($request->input('tagihan_dpp') ?? $request->input('tagihanDpp')),
+            'tagihan_ppn' => $cleanNum($request->input('tagihan_ppn') ?? $request->input('tagihanPpn')),
+            'tagihan_pph' => $cleanNum($request->input('tagihan_pph') ?? $request->input('tagihanPph')),
+            'tagihan_retensi' => $cleanNum($request->input('tagihan_retensi') ?? $request->input('tagihanRetensi')),
+            'tagihan_transfer' => $cleanNum($request->input('tagihan_transfer') ?? $request->input('tagihanTransfer')),
+ 
+            'retensi_nilai' => $cleanNum($request->input('retensi_nilai') ?? $request->input('retensiNilai')),
+            'retensi_dpp' => $cleanNum($request->input('retensi_dpp') ?? $request->input('retensiDpp')),
+            'retensi_ppn' => $cleanNum($request->input('retensi_ppn') ?? $request->input('retensiPpn')),
+            'retensi_pph' => $cleanNum($request->input('retensi_pph') ?? $request->input('retensiPph')),
+            'retensi_transfer' => $cleanNum($request->input('retensi_transfer') ?? $request->input('retensiTransfer')),
             'status_gedung' => $request->input('status_gedung') ?? $request->input('statusGedung'),
         ]);
     }
-
+ 
     public function store(Request $request)
     {
         $this->mergeRequestFields($request);
-
+ 
         $data = $request->validate([
+            'outlet_id' => 'nullable|integer',
             'no_memo' => 'nullable|string',
             'tgl_memo' => 'nullable|date',
             'nama_pekerjaan' => 'required|string|max:255',
@@ -67,42 +90,42 @@ class BuildingRenovationController extends Controller
             'no_spk' => 'nullable|string',
             'pajak_pph' => 'nullable|numeric',
             'tgl_bap_bast' => 'nullable|date',
-
+ 
             'tagihan_nilai' => 'nullable|numeric',
             'tagihan_dpp' => 'nullable|numeric',
             'tagihan_ppn' => 'nullable|numeric',
             'tagihan_pph' => 'nullable|numeric',
             'tagihan_retensi' => 'nullable|numeric',
             'tagihan_transfer' => 'nullable|numeric',
-
+ 
             'retensi_nilai' => 'nullable|numeric',
             'retensi_dpp' => 'nullable|numeric',
             'retensi_ppn' => 'nullable|numeric',
             'retensi_pph' => 'nullable|numeric',
             'retensi_transfer' => 'nullable|numeric',
-
+ 
             'status_gedung' => 'nullable|string',
             'status' => 'nullable|string',
-            'deskripsi' => 'nullable|string',
         ]);
-
+ 
         $renovation = BuildingRenovation::create($data);
-
+ 
         ActivityLog::create([
             'user_email' => auth()->user()->email,
             'action' => 'Tambah',
             'module' => 'Renovasi Gedung',
             'details' => "Menambahkan proyek renovasi: {$renovation->nama_pekerjaan}",
         ]);
-
+ 
         return redirect()->back()->with('message', 'Data renovasi berhasil ditambahkan');
     }
-
+ 
     public function update(Request $request, $id)
     {
         $this->mergeRequestFields($request);
-
+ 
         $data = $request->validate([
+            'outlet_id' => 'nullable|integer',
             'no_memo' => 'nullable|string',
             'tgl_memo' => 'nullable|date',
             'nama_pekerjaan' => 'required|string|max:255',
@@ -120,23 +143,23 @@ class BuildingRenovationController extends Controller
             'no_spk' => 'nullable|string',
             'pajak_pph' => 'nullable|numeric',
             'tgl_bap_bast' => 'nullable|date',
-
+ 
             'tagihan_nilai' => 'nullable|numeric',
             'tagihan_dpp' => 'nullable|numeric',
+ 
             'tagihan_ppn' => 'nullable|numeric',
             'tagihan_pph' => 'nullable|numeric',
             'tagihan_retensi' => 'nullable|numeric',
             'tagihan_transfer' => 'nullable|numeric',
-
+ 
             'retensi_nilai' => 'nullable|numeric',
             'retensi_dpp' => 'nullable|numeric',
             'retensi_ppn' => 'nullable|numeric',
             'retensi_pph' => 'nullable|numeric',
             'retensi_transfer' => 'nullable|numeric',
-
+ 
             'status_gedung' => 'nullable|string',
             'status' => 'nullable|string',
-            'deskripsi' => 'nullable|string',
         ]);
 
         $renovation = BuildingRenovation::findOrFail($id);
@@ -224,7 +247,6 @@ class BuildingRenovationController extends Controller
                     'retensi_transfer' => !empty($row['retensi_transfer']) ? floatval($row['retensi_transfer']) : 0,
                     'status_gedung' => $row['status_gedung'] ?? null,
                     'status' => $row['status'] ?? 'Dalam Proses',
-                    'deskripsi' => $row['deskripsi'] ?? null,
                 ];
 
                 if ($existing) {

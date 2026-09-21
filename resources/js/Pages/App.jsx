@@ -1,7 +1,6 @@
-// resources/js/Pages/App.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle } from "lucide-react";
-import { router } from '@inertiajs/react';
+import { router, Head } from '@inertiajs/react';
 import AppHeader from "../Components/Layout/AppHeader";
 import Navbar from "../Components/Layout/Navbar";
 import TabBar from "../Components/Layout/TabBar";
@@ -11,6 +10,8 @@ import { useNotif } from "../hooks/useNotif";
 import { useTabs } from "../hooks/useTabs";
 import { useTransaksi } from "../hooks/useTransaksi";
 import axios from 'axios';
+import { fetchJenisMeubelair } from "../services/meubelairService";
+import useIdleTimeout from "../hooks/useIdleTimeout";
 
 import { calculateAutoStatus } from "../utils/deviceUtils";
 
@@ -56,6 +57,24 @@ const mapPrinter = (p) => ({
   status: calculateAutoStatus(p.tanggal_mulai, p.tanggal_selesai),
 });
 
+const mapLaptop = (l) => ({
+  ...l,
+  nikPegawai: l.nik_pegawai,
+  namaPengguna: l.nama_pengguna,
+  jabatan: l.jabatan,
+  departemen: l.departemen,
+  produk: l.produk,
+  hostname: l.hostname,
+  sn: l.sn,
+  os: l.os || "Windows",
+  kondisi: l.kondisi || "BAIK",
+  penyedia: l.penyedia,
+  tanggalMulai: l.tanggal_mulai,
+  tanggalSelesai: l.tanggal_selesai,
+  masaSewaBulan: l.masa_sewa_bulan,
+  status: calculateAutoStatus(l.tanggal_mulai, l.tanggal_selesai),
+});
+
 const mapTransactionItem = (item) => ({
   ...item,
   outlet_id: item.outlet_id,
@@ -88,17 +107,23 @@ const mapActivityLog = (log) => ({
 
 export default function App(props) {
   const user = props.auth.user;
-  const userRole = props.currentUserRole || "user";
+  const userRole = props.currentUserRole || user?.role || "user";
+
+  // Admin tidak dibatasi idle timeout 20 menit; user non-admin dimonitor jika idle 20 menit
+  useIdleTimeout(20, userRole !== "admin");
+
   const appId = "logistikku_app_01";
 
   // State management populated from Laravel props
-  const [inventory, setInventory] = useState(props.inventory);
-  const [outlets, setOutlets] = useState(props.outlets);
-  const [transactions, setTransactions] = useState(() => props.transactions.map(mapTransaction));
-  const [computers, setComputers] = useState(() => props.computers.map(mapComputer));
-  const [printers, setPrinters] = useState(() => props.printers.map(mapPrinter));
-  const [usersList, setUsersList] = useState(props.usersList);
-  const [activityLogs, setActivityLogs] = useState(() => props.activityLogs.map(mapActivityLog));
+  const [inventory, setInventory] = useState(props.inventory || []);
+  const [outlets, setOutlets] = useState(props.outlets || []);
+  const [vendors, setVendors] = useState(props.vendors || []);
+  const [transactions, setTransactions] = useState(() => (props.transactions || []).map(mapTransaction));
+  const [computers, setComputers] = useState(() => (props.computers || []).map(mapComputer));
+  const [printers, setPrinters] = useState(() => (props.printers || []).map(mapPrinter));
+  const [laptops, setLaptops] = useState(() => (props.laptops || []).map(mapLaptop));
+  const [usersList, setUsersList] = useState(props.usersList || []);
+  const [activityLogs, setActivityLogs] = useState(() => (props.activityLogs || []).map(mapActivityLog));
   const [buildingLands, setBuildingLands] = useState(props.buildingLands || []);
 
   const [buildingSewas, setBuildingSewas] = useState(props.buildingSewas || []);
@@ -106,6 +131,25 @@ export default function App(props) {
   const [securityFacilities, setSecurityFacilities] = useState(props.securityFacilities || []);
   const [spkHistory, setSpkHistory] = useState(props.spkHistory || []);
   const [soppHistory, setSoppHistory] = useState(props.soppHistory || []);
+  const [meubelairs, setMeubelairs] = useState(props.meubelairs || []);
+  const [masterMeubelairs, setMasterMeubelairs] = useState(props.masterMeubelairs || []);
+  const [jenisMeubelairs, setJenisMeubelairs] = useState(props.jenisMeubelairs || []);
+  const [outletAreas, setOutletAreas] = useState(props.outletAreas || []);
+
+  useEffect(() => { setVendors(props.vendors || []); }, [props.vendors]);
+  useEffect(() => { setJenisMeubelairs(props.jenisMeubelairs || []); }, [props.jenisMeubelairs]);
+  useEffect(() => { setOutletAreas(props.outletAreas || []); }, [props.outletAreas]);
+
+  const handleRefreshJenis = async () => {
+    try {
+      const data = await fetchJenisMeubelair();
+      if (Array.isArray(data)) {
+        setJenisMeubelairs(data);
+      }
+    } catch (err) {
+      console.error("Failed to refresh jenis meubelair:", err);
+    }
+  };
 
   const [landFilter, setLandFilter] = useState("");
   const [sewaFilter, setSewaFilter] = useState("");
@@ -113,6 +157,14 @@ export default function App(props) {
   const [securityFilter, setSecurityFilter] = useState("");
   const [printerFilter, setPrinterFilter] = useState("Semua");
   const [computerFilter, setComputerFilter] = useState("Semua");
+  const [laptopFilter, setLaptopFilter] = useState("Semua");
+  const [riwayatFilter, setRiwayatFilter] = useState("");
+  const [landSearch, setLandSearch] = useState("");
+  const [sewaSearch, setSewaSearch] = useState("");
+  const [printerSearch, setPrinterSearch] = useState("");
+  const [computerSearch, setComputerSearch] = useState("");
+  const [laptopSearch, setLaptopSearch] = useState("");
+  const [notificationCategoryFilter, setNotificationCategoryFilter] = useState("all");
 
   const [theme, setTheme] = useState(() => {
     if (typeof window !== "undefined") {
@@ -134,20 +186,25 @@ export default function App(props) {
 
   // Sync state whenever props update (via Inertia reloading)
   useEffect(() => {
-    setInventory(props.inventory);
-    setOutlets(props.outlets);
-    setTransactions(props.transactions.map(mapTransaction));
-    setComputers(props.computers.map(mapComputer));
-    setPrinters(props.printers.map(mapPrinter));
-    setUsersList(props.usersList);
-    setActivityLogs(props.activityLogs.map(mapActivityLog));
-    setBuildingLands(props.buildingLands || []);
+    if (props.inventory) setInventory(props.inventory);
+    if (props.outlets) setOutlets(props.outlets);
+    if (props.transactions) setTransactions(props.transactions.map(mapTransaction));
+    if (props.computers) setComputers(props.computers.map(mapComputer));
+    if (props.printers) setPrinters(props.printers.map(mapPrinter));
+    if (props.laptops) setLaptops(props.laptops.map(mapLaptop));
+    if (props.usersList) setUsersList(props.usersList);
+    if (props.activityLogs) setActivityLogs(props.activityLogs.map(mapActivityLog));
+    if (props.buildingLands) setBuildingLands(props.buildingLands || []);
 
-    setBuildingSewas(props.buildingSewas || []);
-    setBuildingRenovations(props.buildingRenovations || []);
-    setSecurityFacilities(props.securityFacilities || []);
-    setSpkHistory(props.spkHistory || []);
-    setSoppHistory(props.soppHistory || []);
+    if (props.buildingSewas) setBuildingSewas(props.buildingSewas || []);
+    if (props.buildingRenovations) setBuildingRenovations(props.buildingRenovations || []);
+    if (props.securityFacilities) setSecurityFacilities(props.securityFacilities || []);
+    if (props.spkHistory) setSpkHistory(props.spkHistory || []);
+    if (props.soppHistory) setSoppHistory(props.soppHistory || []);
+    if (props.meubelairs) setMeubelairs(props.meubelairs || []);
+    if (props.masterMeubelairs) setMasterMeubelairs(props.masterMeubelairs || []);
+    if (props.jenisMeubelairs) setJenisMeubelairs(props.jenisMeubelairs || []);
+    if (props.outletAreas) setOutletAreas(props.outletAreas || []);
 
   }, [
     props.inventory,
@@ -155,6 +212,7 @@ export default function App(props) {
     props.transactions,
     props.computers,
     props.printers,
+    props.laptops,
     props.usersList,
     props.activityLogs,
     props.buildingLands,
@@ -163,7 +221,11 @@ export default function App(props) {
     props.buildingRenovations,
     props.securityFacilities,
     props.spkHistory,
-    props.soppHistory
+    props.soppHistory,
+    props.meubelairs,
+    props.masterMeubelairs,
+    props.jenisMeubelairs,
+    props.outletAreas
   ]);
 
   // Alert calculations for contracts expiring soon (< 3 months) or already expired
@@ -187,13 +249,23 @@ export default function App(props) {
     .filter((c) => c.sisaBulan !== null && c.sisaBulan <= 3)
     .sort((a, b) => a.sisaHari - b.sisaHari);
 
+  const notifSewaLaptop = laptops
+    .filter((l) => l.tanggalSelesai && l.status !== "Inventaris")
+    .map((l) => ({
+      ...l,
+      sisaBulan: hitungSisaBulan(l.tanggalSelesai),
+      sisaHari: hitungSisaHari(l.tanggalSelesai),
+    }))
+    .filter((l) => l.sisaBulan !== null && l.sisaBulan <= 3)
+    .sort((a, b) => a.sisaHari - b.sisaHari);
+
   const notifLand = buildingLands
     .filter((item) => item.tgl_berakhir_shgb && item.status !== "Done")
     .map((item) => ({ ...item, sisaHari: hitungSisaHari(item.tgl_berakhir_shgb) }))
     .filter((item) => item.sisaHari !== null && item.sisaHari <= 30);
 
   const notifBuildingSewa = buildingSewas
-    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done" && item.status !== "Selesai")
+    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done")
     .map((item) => {
       const tglAkhir = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
       return { ...item, sisaHari: hitungSisaHari(tglAkhir) };
@@ -203,10 +275,34 @@ export default function App(props) {
   // Notifications, Tabs, and Transactions hooks
   const { notif, showNotif } = useNotif();
   const { tabs, setTabs, activeTab, setActiveTab, handleSetView } = useTabs();
+
+  // On-demand fetch untuk tab yang di-lazy load (hanya diambil saat tab dibuka pertama kali)
+  const lazyLoadedRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!activeTab) return;
+
+    if (activeTab === "log_aktivitas" && !props.activityLogs && !lazyLoadedRef.current.has("activityLogs")) {
+      lazyLoadedRef.current.add("activityLogs");
+      router.reload({ only: ["activityLogs"] });
+    } else if (activeTab === "kelola_user" && userRole === "admin" && !props.usersList && !lazyLoadedRef.current.has("usersList")) {
+      lazyLoadedRef.current.add("usersList");
+      router.reload({ only: ["usersList"] });
+    } else if (activeTab.startsWith("spk_") && !props.spkHistory && !lazyLoadedRef.current.has("spkHistory")) {
+      lazyLoadedRef.current.add("spkHistory");
+      router.reload({ only: ["spkHistory"] });
+    } else if (activeTab.startsWith("sopp_") && !props.soppHistory && !lazyLoadedRef.current.has("soppHistory")) {
+      lazyLoadedRef.current.add("soppHistory");
+      router.reload({ only: ["soppHistory"] });
+    }
+  }, [activeTab, userRole, props.activityLogs, props.usersList, props.spkHistory, props.soppHistory]);
   
   // Scroll to top on active tab view change
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const timer = setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }, 10);
+    return () => clearTimeout(timer);
   }, [activeTab]);
   
   const {
@@ -224,6 +320,7 @@ export default function App(props) {
   // Handle Logout via Laravel Session
   const handleLogout = (e) => {
     e?.preventDefault();
+    localStorage.removeItem("smartlog_last_activity");
     router.post(route('logout'));
   };
 
@@ -384,6 +481,7 @@ export default function App(props) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0f1712] font-sans text-gray-900 dark:text-slate-100 print:p-0">
+      <Head title={VIEW_TITLES[activeTab] || "Dashboard"} />
 
       {/* Notification Toast */}
       {notif.show && (
@@ -399,10 +497,12 @@ export default function App(props) {
         setView={handleSetView}
         startNewDocument={startNewDocument}
         handleLogout={handleLogout}
-        notifCount={notifSewa.length + notifSewaKomputer.length + notifLand.length + notifBuildingSewa.length}
+        notifCount={notifSewa.length + notifSewaKomputer.length + notifSewaLaptop.length + notifLand.length + notifBuildingSewa.length}
         userRole={userRole}
         printers={printers}
         computers={computers}
+        laptops={laptops}
+        notifSewaLaptop={notifSewaLaptop}
         buildingLands={buildingLands}
         buildingSewas={buildingSewas}
         theme={theme}
@@ -412,20 +512,24 @@ export default function App(props) {
         setLandFilter={setLandFilter}
         setSewaFilter={setSewaFilter}
         setComputerFilter={setComputerFilter}
+        setLaptopFilter={setLaptopFilter}
         setPrinterFilter={setPrinterFilter}
         setRenovationFilter={setRenovationFilter}
         setSecurityFilter={setSecurityFilter}
       />
 
       {/* Main Content Area */}
-      <div className={`pt-16 md:pt-0 ${isSidebarOpen ? "md:pl-64" : "md:pl-0"} flex flex-col min-h-screen print:pl-0 print:pt-0 transition-all duration-300`}>
+      <div className={`pt-16 md:pt-0 ${isSidebarOpen ? "md:pl-[340px]" : "md:pl-[84px]"} flex flex-col min-h-screen print:pl-0 print:pt-0 transition-all duration-300`}>
 
         {/* Sticky App Header */}
         <AppHeader
           user={user}
           title={VIEW_TITLES[activeTab]}
+          activeTab={activeTab}
           printers={printers}
           computers={computers}
+          laptops={laptops}
+          notifSewaLaptop={notifSewaLaptop}
           buildingLands={buildingLands}
           buildingSewas={buildingSewas}
           setView={handleSetView}
@@ -433,6 +537,7 @@ export default function App(props) {
           setTheme={setTheme}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
+          handleLogout={handleLogout}
         />
 
         {/* Sticky Tab Bar */}
@@ -456,10 +561,13 @@ export default function App(props) {
             setTransactions={setTransactions}
             inventory={inventory}
             outlets={outlets}
+            vendors={vendors}
             printers={printers}
             computers={computers}
+            laptops={laptops}
             notifSewa={notifSewa}
             notifSewaKomputer={notifSewaKomputer}
+            notifSewaLaptop={notifSewaLaptop}
             usersList={usersList}
             activityLogs={activityLogs}
             buildingLands={buildingLands}
@@ -467,6 +575,12 @@ export default function App(props) {
             buildingSewas={buildingSewas}
             buildingRenovations={buildingRenovations}
             securityFacilities={securityFacilities}
+            meubelairs={meubelairs}
+            masterMeubelairs={masterMeubelairs}
+            jenisMeubelairs={jenisMeubelairs}
+            setJenisMeubelairs={setJenisMeubelairs}
+            onRefreshJenis={handleRefreshJenis}
+            outletAreas={outletAreas}
 
             formData={formData}
             setFormData={setFormData}
@@ -494,6 +608,22 @@ export default function App(props) {
             setPrinterFilter={setPrinterFilter}
             computerFilter={computerFilter}
             setComputerFilter={setComputerFilter}
+            laptopFilter={laptopFilter}
+            setLaptopFilter={setLaptopFilter}
+            riwayatFilter={riwayatFilter}
+            setRiwayatFilter={setRiwayatFilter}
+            landSearch={landSearch}
+            setLandSearch={setLandSearch}
+            sewaSearch={sewaSearch}
+            setSewaSearch={setSewaSearch}
+            printerSearch={printerSearch}
+            setPrinterSearch={setPrinterSearch}
+            computerSearch={computerSearch}
+            setComputerSearch={setComputerSearch}
+            laptopSearch={laptopSearch}
+            setLaptopSearch={setLaptopSearch}
+            notificationCategoryFilter={notificationCategoryFilter}
+            setNotificationCategoryFilter={setNotificationCategoryFilter}
           />
         </div>
 

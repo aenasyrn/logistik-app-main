@@ -20,6 +20,16 @@ class OutletController extends Controller
         $request->validate([
             'kode' => 'nullable|string|max:50|unique:outlets,code',
             'nama' => 'required|string|max:255',
+            'area' => 'required|string|max:100',
+            'cabang' => 'required|string|max:100',
+            'type_outlet' => 'nullable|string|max:100',
+            'type_bangunan' => 'nullable|string|max:100',
+            'status_gedung' => 'nullable|string|max:100',
+            'alamat' => 'nullable|string',
+            'kelurahan' => 'nullable|string|max:100',
+            'kecamatan' => 'nullable|string|max:100',
+            'kab_kota' => 'nullable|string|max:100',
+            'provinsi' => 'nullable|string|max:100',
         ], [
             'kode.unique' => 'Kode outlet sudah digunakan oleh instansi lain.',
         ]);
@@ -38,6 +48,16 @@ class OutletController extends Controller
         }
         
         $outlet->nama = $request->nama;
+        $outlet->area = $request->area;
+        $outlet->cabang = $request->cabang;
+        $outlet->type_outlet = $request->type_outlet;
+        $outlet->type_bangunan = $request->type_bangunan;
+        $outlet->status_gedung = $request->status_gedung;
+        $outlet->alamat = $request->alamat;
+        $outlet->kelurahan = $request->kelurahan;
+        $outlet->kecamatan = $request->kecamatan;
+        $outlet->kab_kota = $request->kab_kota;
+        $outlet->provinsi = $request->provinsi;
         $outlet->save();
 
         ActivityLog::create([
@@ -62,6 +82,16 @@ class OutletController extends Controller
         $request->validate([
             'kode' => 'nullable|string|max:50|unique:outlets,code,' . $id,
             'nama' => 'required|string|max:255',
+            'area' => 'required|string|max:100',
+            'cabang' => 'required|string|max:100',
+            'type_outlet' => 'nullable|string|max:100',
+            'type_bangunan' => 'nullable|string|max:100',
+            'status_gedung' => 'nullable|string|max:100',
+            'alamat' => 'nullable|string',
+            'kelurahan' => 'nullable|string|max:100',
+            'kecamatan' => 'nullable|string|max:100',
+            'kab_kota' => 'nullable|string|max:100',
+            'provinsi' => 'nullable|string|max:100',
         ], [
             'kode.unique' => 'Kode outlet sudah digunakan oleh instansi lain.',
         ]);
@@ -73,6 +103,16 @@ class OutletController extends Controller
         if ($request->has('kode')) {
             $outlet->code = $request->kode;
         }
+        $outlet->area = $request->area;
+        $outlet->cabang = $request->cabang;
+        $outlet->type_outlet = $request->type_outlet;
+        $outlet->type_bangunan = $request->type_bangunan;
+        $outlet->status_gedung = $request->status_gedung;
+        $outlet->alamat = $request->alamat;
+        $outlet->kelurahan = $request->kelurahan;
+        $outlet->kecamatan = $request->kecamatan;
+        $outlet->kab_kota = $request->kab_kota;
+        $outlet->provinsi = $request->provinsi;
         $outlet->save();
 
         ActivityLog::create([
@@ -133,6 +173,14 @@ class OutletController extends Controller
                 $rawCode = !empty($row['kode']) ? trim((string)$row['kode']) : null;
                 $code = ($rawCode === '-' || $rawCode === '') ? null : $rawCode;
 
+                $typeOutlet = !empty($row['type_outlet']) ? trim((string)$row['type_outlet']) : null;
+                $typeBangunan = !empty($row['type_bangunan']) ? trim((string)$row['type_bangunan']) : null;
+                $statusGedung = !empty($row['status_gedung']) ? trim((string)$row['status_gedung']) : null;
+                $alamat = !empty($row['alamat']) ? trim((string)$row['alamat']) : null;
+                $kelurahan = !empty($row['kelurahan']) ? trim((string)$row['kelurahan']) : null;
+                $kecamatan = !empty($row['kecamatan']) ? trim((string)$row['kecamatan']) : null;
+                $kabKota = !empty($row['kab_kota']) ? trim((string)$row['kab_kota']) : null;
+                $provinsi = !empty($row['provinsi']) ? trim((string)$row['provinsi']) : null;
                 // Find existing outlet: if code is present, match ONLY by code. If empty, match by name.
                 $outlet = null;
                 if ($code) {
@@ -155,6 +203,41 @@ class OutletController extends Controller
                         $outlet->code = $code;
                         $changed = true;
                     }
+                    if ($outlet->type_outlet !== $typeOutlet) {
+                        $outlet->type_outlet = $typeOutlet;
+                        $changed = true;
+                    }
+                    if ($outlet->type_bangunan !== $typeBangunan) {
+                        $outlet->type_bangunan = $typeBangunan;
+                        $changed = true;
+                    }
+                    if ($outlet->status_gedung !== $statusGedung) {
+                        $outlet->status_gedung = $statusGedung;
+                        $changed = true;
+                    }
+                    if ($outlet->alamat !== $alamat) {
+                        $outlet->alamat = $alamat;
+                        $changed = true;
+                    }
+                    if ($outlet->kelurahan !== $kelurahan) {
+                        $outlet->kelurahan = $kelurahan;
+                        $changed = true;
+                    }
+
+                    if ($outlet->kecamatan !== $kecamatan) {
+                        $outlet->kecamatan = $kecamatan;
+                        $changed = true;
+                    }
+
+                    if ($outlet->kab_kota !== $kabKota) {
+                        $outlet->kab_kota = $kabKota;
+                        $changed = true;
+                    }
+
+                    if ($outlet->provinsi !== $provinsi) {
+                        $outlet->provinsi = $provinsi;
+                        $changed = true;
+                    }
                     if ($changed) {
                         $outlet->save();
                     }
@@ -171,6 +254,14 @@ class OutletController extends Controller
                         $outlet->code = $code;
                     }
                     $outlet->nama = $row['nama'];
+                    $outlet->type_outlet = $typeOutlet;
+                    $outlet->type_bangunan = $typeBangunan;
+                    $outlet->status_gedung = $statusGedung;
+                    $outlet->alamat = $alamat;
+                    $outlet->kelurahan = $kelurahan;
+                    $outlet->kecamatan = $kecamatan;
+                    $outlet->kab_kota = $kabKota;
+                    $outlet->provinsi = $provinsi;
                     $outlet->save();
 
                     // Keep memory indexes updated for subsequent rows

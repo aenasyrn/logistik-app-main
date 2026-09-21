@@ -4,17 +4,19 @@
 import React, { useState } from "react";
 import {
   Loader2, AlertTriangle, QrCode, Edit, Trash2,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Eye,
 } from "lucide-react";
 import { formatBulanTahun, hitungSisaBulan, hitungSisaHari, getStatusBadge } from "../../../utils/deviceUtils";
+import DetailHistoryModal from "@/Components/Common/DetailHistoryModal";
 
 export default function PrinterTable({
   isLoading, paginatedData, filteredData, userRole,
   currentPage, totalPages, startIndex, itemsPerPage,
   setCurrentPage, onEdit, onDelete, onQr,
+  inventoryList = [], onNavigateToMasterBarang,
 }) {
   const [selectedId, setSelectedId] = useState(null);
-  const [hoveredId, setHoveredId] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
 
   const getVisiblePages = () => {
     const maxVisible = 5;
@@ -40,32 +42,31 @@ export default function PrinterTable({
   return (
     <div className="flex flex-col">
       <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full text-left border-collapse border border-slate-200 min-w-[950px]">
+        <table className="w-full text-left border-collapse border border-slate-200 min-w-[1150px] table-fixed">
           <thead>
-            <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-              <th className="p-2.5 w-12 text-center align-middle border border-blue-800 bg-blue-900">No</th>
-              <th className="p-2.5 text-left align-middle border border-blue-800 bg-blue-900">Outlet</th>
-              <th className="p-2.5 text-left align-middle border border-blue-800 bg-blue-900">Hardware & S/N</th>
-              <th className="p-2.5 text-left align-middle border border-blue-800 bg-blue-900">Penyedia</th>
-              <th className="p-2.5 text-left align-middle border border-blue-800 bg-blue-900">Masa Sewa</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status & Kondisi</th>
-              {userRole === "admin" && (
-                <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>
-              )}
+            <tr className="bg-[#0d5c3a] text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+              <th className="p-2.5 w-[4%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">No</th>
+              <th className="p-2.5 w-[18%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Outlet</th>
+              <th className="p-2.5 w-[18%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Hardware & S/N</th>
+              <th className="p-2.5 w-[13%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Vendor</th>
+              <th className="p-2.5 w-[14%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Masa Sewa</th>
+              <th className="p-2.5 w-[11%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Status & Kondisi</th>
+              <th className="p-2.5 w-[12%] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Keterangan</th>
+              <th className="p-2.5 w-[10%] min-w-[140px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
 
           <tbody className="text-xs text-gray-800 bg-white">
             {isLoading ? (
               <tr>
-                <td colSpan={userRole === "admin" ? "7" : "6"} className="p-10 text-center text-blue-500 border border-slate-200 bg-white">
+                <td colSpan="8" className="p-10 text-center text-blue-500 border border-slate-200 bg-white">
                   <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                   <p className="mt-2 text-gray-500 text-xs">Memuat data...</p>
                 </td>
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={userRole === "admin" ? "7" : "6"} className="p-6 text-center text-gray-500 text-xs border border-slate-200 bg-white">
+                <td colSpan="8" className="p-6 text-center text-gray-500 text-xs border border-slate-200 bg-white">
                   Tidak ada data printer ditemukan.
                 </td>
               </tr>
@@ -74,33 +75,44 @@ export default function PrinterTable({
                 const globalIndex = startIndex + index + 1;
                 const sisaBulan      = hitungSisaBulan(printer.tanggalSelesai);
                 const sisaHari       = hitungSisaHari(printer.tanggalSelesai);
+
+                // Status real-time: jika tanggal selesai sudah lewat -> Sewa Habis!
+                const isExpired = sisaHari !== null && sisaHari < 0;
+                // Sisa 1 minggu (0 sampai 7 hari)
+                const isExpiringWithinWeek = sisaHari !== null && sisaHari >= 0 && sisaHari <= 7;
+                // Segera berakhir (< 3 bulan)
                 const isExpiringSoon =
-                  printer.status === "Sewa Berjalan" &&
+                  !isExpired &&
                   sisaBulan !== null && sisaBulan <= 3 && sisaBulan >= 0;
-                const isExpired = printer.status === "Sewa Habis";
+
+                const realStatus = (!printer.tanggalMulai && !printer.tanggalSelesai)
+                  ? "Inventaris"
+                  : (isExpired ? "Sewa Habis" : "Sewa Berjalan");
+
+                const isInventaris = realStatus === "Inventaris";
 
                 const isEven = index % 2 !== 0;
                 const isSelected = selectedId === printer.id;
-                const isHovered = hoveredId === printer.id;
 
                 let bgClass = "";
                 if (isSelected) {
-                  bgClass = isHovered ? "bg-blue-200 text-blue-950" : "bg-blue-100 text-blue-900";
-                } else if (isHovered) {
-                  bgClass = "bg-slate-200 text-gray-900";
-                } else if (isExpired) {
-                  bgClass = "bg-red-50/70 text-gray-800";
-                } else if (isExpiringSoon) {
-                  bgClass = "bg-orange-50/70 text-gray-800";
+                  bgClass = "bg-blue-100 text-blue-900 hover:bg-blue-200 hover:text-blue-950";
                 } else {
-                  bgClass = isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800";
+                  const baseHover = "hover:bg-slate-200 hover:text-gray-900";
+                  if (isExpired) {
+                    bgClass = `bg-red-50/70 text-gray-800 ${baseHover}`;
+                  } else if (isExpiringWithinWeek) {
+                    bgClass = `bg-amber-50/70 text-gray-800 ${baseHover}`;
+                  } else if (isExpiringSoon) {
+                    bgClass = `bg-orange-50/70 text-gray-800 ${baseHover}`;
+                  } else {
+                    bgClass = `${isEven ? "bg-slate-100 text-gray-800" : "bg-white text-gray-800"} ${baseHover}`;
+                  }
                 }
 
                 return (
                   <tr
                     key={printer.id}
-                    onMouseEnter={() => setHoveredId(printer.id)}
-                    onMouseLeave={() => setHoveredId(null)}
                     onClick={() => setSelectedId((prev) => (prev === printer.id ? null : printer.id))}
                     className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                   >
@@ -109,8 +121,10 @@ export default function PrinterTable({
 
                     {/* Outlet */}
                     <td className="p-2 border border-slate-200 align-middle">
-                      <p className="font-semibold text-gray-800 text-xs">{printer.outlet}</p>
-                      <p className="text-[10px] text-gray-500">ID: {printer.idOutlet}</p>
+                      <p className="font-semibold text-gray-800 text-xs">{printer.outlet || "-"}</p>
+                      <p className="text-[10px] text-gray-500">
+                        ID: {printer.idOutlet || printer.outlet_id || printer.outlet_rel?.code || printer.outlet_rel?.id || "-"}
+                      </p>
                     </td>
 
                     {/* Hardware */}
@@ -125,33 +139,44 @@ export default function PrinterTable({
                       <p className="text-[10px] text-gray-500 font-mono mt-0.5">SN: {printer.sn}</p>
                     </td>
 
-                    {/* Penyedia */}
+                    {/* Vendor */}
                     <td className="p-2 border border-slate-200 align-middle text-xs font-semibold text-gray-700">
-                      {printer.penyedia}
+                      {printer.vendor}
                     </td>
 
                     {/* Masa Sewa */}
                     <td className="p-2 border border-slate-200 align-middle">
-                      <div className={`text-[10px] flex items-center gap-1 ${isExpiringSoon || isExpired ? "text-gray-800 font-medium" : "text-gray-600"}`}>
+                      <div className={`text-[10px] flex items-center gap-1 ${isExpiringWithinWeek || isExpired ? "text-gray-800 font-medium" : "text-gray-600"}`}>
                         {printer.tanggalMulai || printer.tanggalSelesai ? (
                           `${formatBulanTahun(printer.tanggalMulai)} - ${formatBulanTahun(printer.tanggalSelesai)}`
                         ) : (
                           <span className="italic text-gray-400">Tidak ada data</span>
                         )}
-                        {(isExpiringSoon || isExpired) && (
-                          <AlertTriangle className={`w-3 h-3 shrink-0 ${isExpired ? "text-red-500" : "text-orange-500"}`} title={isExpired ? "Sewa Habis" : "Segera Habis"} />
+                        {(isExpiringWithinWeek || isExpired) && (
+                          <AlertTriangle className={`w-3 h-3 shrink-0 ${isExpired ? "text-red-500" : "text-amber-500"}`} title={isExpired ? "Sewa Habis" : "Segera Habis"} />
                         )}
                       </div>
-                      {isExpiringSoon && (
+
+                      {/* Notifikasi Masa Sewa jika sisa <= 1 minggu atau habis */}
+                      {isExpiringWithinWeek && (
+                        <div className="mt-1">
+                          <p className="text-[10px] text-amber-700 font-bold bg-amber-100/70 w-max px-1.5 py-0.5 rounded border border-amber-300 animate-pulse">
+                            {sisaHari === 0 ? "Habis Hari Ini!" : `Sisa ${sisaHari} hari lagi`}
+                          </p>
+                        </div>
+                      )}
+
+                      {isExpired && (
+                        <div className="mt-1">
+                          <p className="text-[10px] text-red-600 font-bold bg-red-100/60 w-max px-1.5 py-0.5 rounded border border-red-200">
+                            {`Habis Masa Sewa ${sisaHari !== null ? Math.abs(sisaHari) : 0} hari lalu`}
+                          </p>
+                        </div>
+                      )}
+
+                      {!isExpired && !isExpiringWithinWeek && isExpiringSoon && (
                         <p className="text-[10px] text-orange-600 font-bold mt-0.5 bg-orange-100/50 w-max px-1.5 py-0.5 rounded">
                           {sisaBulan === 0 ? `Sisa ${sisaHari} hari` : `Sisa ${sisaBulan} bln`}
-                        </p>
-                      )}
-                      {isExpired && (
-                        <p className="text-[10px] text-red-600 font-bold mt-0.5 bg-red-100/60 w-max px-1.5 py-0.5 rounded border border-red-200">
-                          {sisaBulan === 0
-                            ? `Habis Masa Sewa ${sisaHari !== null ? Math.abs(sisaHari) : 0} hari`
-                            : `Habis Masa Sewa ${sisaBulan !== null ? Math.abs(sisaBulan) : 0} bln`}
                         </p>
                       )}
                     </td>
@@ -159,10 +184,16 @@ export default function PrinterTable({
                     {/* Status & Kondisi */}
                     <td className="p-2 border border-slate-200 text-center align-middle">
                       <div className="flex flex-col items-center justify-center gap-1">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusBadge(printer.status)}`}>
-                          {printer.status}
+                        <span className={`inline-block w-24 text-center px-2 py-0.5 rounded text-[10px] font-bold border status-badge ${
+                          realStatus === "Inventaris" ? "status-badge-inventaris" :
+                          realStatus === "Sewa Berjalan" ? "status-badge-sewa-berjalan" :
+                          "status-badge-sewa-habis"
+                        } ${getStatusBadge(realStatus)}`}>
+                          {realStatus}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                        <span className={`inline-block w-24 text-center px-1.5 py-0.5 rounded text-[10px] font-bold border kondisi-badge ${
+                          printer.kondisi === "BAIK" ? "kondisi-badge-baik" : "kondisi-badge-rusak"
+                        } ${
                           printer.kondisi === "BAIK"
                             ? "text-green-600 bg-green-50 border-green-100"
                             : "text-orange-600 bg-orange-50 border-orange-100"
@@ -172,28 +203,44 @@ export default function PrinterTable({
                       </div>
                     </td>
 
+                    {/* Keterangan */}
+                    <td className="p-2 border border-slate-200 align-middle">
+                      <p className="text-[10px] text-gray-500 truncate" title={printer.keterangan}>
+                        {printer.keterangan || "-"}
+                      </p>
+                    </td>
+
                     {/* Aksi */}
-                    {userRole === "admin" && (
-                      <td className="p-2 border border-slate-200 text-center align-middle">
-                        <div className="flex justify-center items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => onQr(printer)} title="Cetak Label QR Code"
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-200">
-                            <QrCode className="w-3.5 h-3.5" />
-                          </button>
-                          <div className="w-px h-5 bg-gray-200 my-auto mx-0.5" />
-                          <button onClick={() => onEdit(printer)} title="Edit Data"
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onDelete(printer.id, printer.produk || printer.sn)}
-                            title="Hapus Data"
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-3 py-2 border border-slate-200 text-center align-middle">
+                      <div className="flex justify-center items-center gap-1.5 whitespace-nowrap px-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setDetailItem(printer)}
+                          title="Detail & Riwayat Periode"
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        {userRole === "admin" && (
+                          <>
+                            <button onClick={() => onEdit(printer)} title="Edit Data"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onDelete(printer.id, printer.produk || printer.sn);
+                              }}
+                              title="Hapus Data"
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -238,6 +285,15 @@ export default function PrinterTable({
           </div>
         </div>
       )}
+      {/* Detail & History Modal */}
+      <DetailHistoryModal
+        isOpen={!!detailItem}
+        onClose={() => setDetailItem(null)}
+        item={detailItem}
+        type="printer"
+        inventoryList={inventoryList}
+        onNavigateToMasterBarang={onNavigateToMasterBarang}
+      />
     </div>
   );
 }

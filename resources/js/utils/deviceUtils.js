@@ -60,10 +60,14 @@ export const hitungSisaHari = (tanggalSelesai) => {
  * @returns {"Inventaris"|"Sewa Berjalan"|"Sewa Habis"}
  */
 export const calculateAutoStatus = (startDate, endDate) => {
-  if (!startDate || !endDate) return "Inventaris";
+  if (!endDate && !startDate) return "Inventaris";
+  if (!endDate) return "Inventaris";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  return new Date(endDate) >= today ? "Sewa Berjalan" : "Sewa Habis";
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+  if (isNaN(end.getTime())) return "Inventaris";
+  return end >= today ? "Sewa Berjalan" : "Sewa Habis";
 };
 
 /**
@@ -170,6 +174,6 @@ export const emptyFormKomputer = {
 /** Nilai awal formData kosong untuk Printer. */
 export const emptyFormPrinter = {
   idOutlet: "", outlet: "", produk: "", sn: "",
-  penyedia: "", tanggalMulai: "", tanggalSelesai: "",
-  status: "Inventaris", kondisi: "BAIK", deskripsi: "",
+  vendor: "", tanggalMulai: "", tanggalSelesai: "",
+  status: "Inventaris", kondisi: "BAIK", keterangan: "",
 };

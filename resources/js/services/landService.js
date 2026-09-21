@@ -1,6 +1,7 @@
 // resources/js/services/landService.js
 import axios from 'axios';
 import { router } from '@inertiajs/react';
+import { downloadExcelTemplate } from '../utils/excelHelper';
 
 const parseCsvDate = (dateStr) => {
   if (!dateStr) return null;
@@ -36,12 +37,26 @@ export const importLandCSV = async (appId, rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
   const formattedRows = [];
+  let lastUnitKerja = "";
+
   for (const row of rows) {
-    // Lewati baris kosong jika tidak ada unit kerja
-    if (!row["UNIT KERJA"]) continue;
+    const rawUnit = row["UNIT KERJA"]?.trim() || "";
+    const unitKerja = rawUnit || lastUnitKerja;
+
+    const hasData = Boolean(
+      unitKerja ||
+      row["NO SERTIFIKAT"] ||
+      row["NO SHGB"] ||
+      row["NO SERTIFIKAT GABUNGAN"]
+    );
+    if (!hasData) continue;
+
+    if (rawUnit) {
+      lastUnitKerja = rawUnit;
+    }
 
     formattedRows.push({
-      unit_kerja: row["UNIT KERJA"]?.trim() || "",
+      unit_kerja: unitKerja,
       alamat: row["ALAMAT"]?.trim() || "",
       peruntukan: row["PERUNTUKAN"]?.trim() || "",
       aset_sap: row["ASET SAP"]?.trim() || "",
@@ -60,10 +75,11 @@ export const importLandCSV = async (appId, rows) => {
     });
   }
 
-  await axios.post('/building-lands/import', { rows: formattedRows });
-  router.reload({ only: ['buildingLands'] });
-  return formattedRows.length;
+  const res = await axios.post('/building-lands/import', { rows: formattedRows });
+  return res.data?.imported_count ?? formattedRows.length;
 };
+
+export const importLandExcel = importLandCSV;
 
 export const downloadLandTemplate = () => {
   const headers = [
@@ -72,16 +88,8 @@ export const downloadLandTemplate = () => {
     "TGL BERAKHIR SHGB", "TAHUN PEROLEHAN", "LUAS TANAH", "LUAS PAGAR", "LUAS BANGUNAN", "KETERANGAN"
   ];
   const contoh = [
-    "Kanca Palembang,Jl. Jend. Sudirman No. 12,Kantor Cabang,Aset 001,SHGB 12345,CERT-9988,CERT-GAB-01,IMB-5678,PT Bank Rakyat Indonesia,2015-05-10,2035-05-09,2015,500,100,350,Aset bersertifikat lengkap",
-    "Unit Kerja Pekanbaru,Jl. Sudirman No. 45,Kantor Cabang Pembantu,Aset 002,,CERT-9989,,IMB-5679,PT Bank Rakyat Indonesia,,,2018,400,,250,"
+    ["Kanca Palembang", "Jl. Jend. Sudirman No. 12", "Kantor Cabang", "Aset 001", "SHGB 12345", "CERT-9988", "CERT-GAB-01", "IMB-5678", "PT Bank Rakyat Indonesia", "2015-05-10", "2035-05-09", 2015, 500, 100, 350, "Aset bersertifikat lengkap"],
+    ["Unit Kerja Pekanbaru", "Jl. Sudirman No. 45", "Kantor Cabang Pembantu", "Aset 002", "", "CERT-9989", "", "IMB-5679", "PT Bank Rakyat Indonesia", "", "", 2018, 400, "", 250, ""]
   ];
-  const csv  = headers.join(",") + "\n" + contoh.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.setAttribute("download", "Template_Import_Tanah.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadExcelTemplate("Template_Import_Tanah.xlsx", headers, contoh, "Daftar Tanah");
 };

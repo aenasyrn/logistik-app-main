@@ -17,6 +17,9 @@ export default function BuildingDashboardView({
   setView,
   setLandFilter,
   setSewaFilter,
+  setLandSearch,
+  setSewaSearch,
+  setNotificationCategoryFilter,
 }) {
 
   // State for Year Filter on stats & charts
@@ -121,7 +124,7 @@ export default function BuildingDashboardView({
   // Helper to format currency
   const formatHarga = (harga) => {
     if (harga === null || harga === undefined) return "—";
-    return `Rp ${Number(harga).toLocaleString("id-ID")}`;
+    return `Rp\u00A0${Number(harga).toLocaleString("id-ID")}`;
   };
 
   // Helper to format date dd/mm/yyyy
@@ -382,15 +385,6 @@ export default function BuildingDashboardView({
                 <p className="text-xs text-red-600 dark:text-red-300/80 font-medium">Terdapat {alertTanah.length} aset tanah yang mendekati masa habis berlaku SHGB (atau sudah habis).</p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                if (setLandFilter) setLandFilter("expired");
-                setView("bangunan_tanah");
-              }}
-              className="hidden sm:block text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-355 transition-colors bg-white/60 dark:bg-[#2d0f0f]/50 px-3 py-1.5 rounded-lg border border-red-100 dark:border-[#380d0d] hover:bg-white dark:hover:bg-[#2d0f0f]"
-            >
-              Kelola &rarr;
-            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs whitespace-nowrap alert-table">
@@ -400,7 +394,8 @@ export default function BuildingDashboardView({
                   <th className="px-5 py-2.5">Peruntukan</th>
                   <th className="px-5 py-2.5">No. SHGB</th>
                   <th className="px-5 py-2.5 text-right">Tanggal Berakhir</th>
-                  <th className="px-5 py-2.5 text-right">Sisa Waktu</th>
+                  <th className="px-5 py-2.5 text-center">Sisa Waktu</th>
+                  <th className="px-5 py-2.5 text-center">Kelola</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-100/50 dark:divide-[#380d0d]">
@@ -408,32 +403,44 @@ export default function BuildingDashboardView({
                   <tr key={item.id} className="hover:bg-red-50/50 dark:hover:bg-[#2b0b0b] transition-colors">
                     <td className="px-5 py-2.5 font-semibold text-red-900 dark:text-red-200">{item.unit_kerja || "-"}</td>
                     <td className="px-5 py-2.5 text-red-800 dark:text-red-300">{item.peruntukan || "-"}</td>
-                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300 font-mono">{item.no_shgb || "-"}</td>
+                    <td className="px-5 py-2.5 text-red-800 dark:text-red-300 font-mono whitespace-pre-line leading-tight">{item.no_shgb || "-"}</td>
                     <td className="px-5 py-2.5 text-right text-red-800 dark:text-red-300">{formatDate(item.tgl_berakhir_shgb)}</td>
-                    <td className="px-5 py-2.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
-                        <Clock className="w-3 h-3" />
-                        {item.sisaHari < 0 
-                          ? (Math.abs(item.sisaHari) <= 30 ? `Habis ${Math.abs(item.sisaHari)} hari` : `Habis ${Math.floor(Math.abs(item.sisaHari)/30)} bln`)
-                          : `${item.sisaHari} hari`}
+                    <td className="px-5 py-2.5 text-center">
+                      <span className={`inline-flex items-center justify-center gap-1 w-28 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span className="border-0 border-none bg-transparent">
+                          {item.sisaHari < 0 
+                            ? (Math.abs(item.sisaHari) <= 30 ? `Habis ${Math.abs(item.sisaHari)} hari` : `Habis ${Math.floor(Math.abs(item.sisaHari)/30)} bln`)
+                            : `${item.sisaHari} hari`}
+                        </span>
                       </span>
+                    </td>
+                    <td className="px-5 py-2.5 text-center">
+                      <button
+                        onClick={() => {
+                          if (setLandSearch) setLandSearch(item.no_shgb || item.unit_kerja || "");
+                          if (setLandFilter) setLandFilter("");
+                          setView("bangunan_tanah");
+                        }}
+                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                      >
+                        Kelola
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {alertTanah.length > 3 && (
-            <div
-              className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
-              onClick={() => {
-                if (setLandFilter) setLandFilter("expired");
-                setView("bangunan_tanah");
-              }}
-            >
-              Lihat {alertTanah.length - 3} aset tanah lainnyan...
-            </div>
-          )}
+          <div
+            className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
+            onClick={() => {
+              if (setNotificationCategoryFilter) setNotificationCategoryFilter("tanah");
+              setView("notifikasi");
+            }}
+          >
+            Lihat {alertTanah.length > 3 ? `${alertTanah.length - 3} aset tanah lainnya...` : "selengkapnya di Notifikasi..."}
+          </div>
         </div>
       )}        {/* SECTION 2: NOTIFIKASI SEWA */}
       {alertSewa.length > 0 && (
@@ -448,15 +455,6 @@ export default function BuildingDashboardView({
                 <p className="text-xs text-red-600 dark:text-red-300/80 font-medium">Terdapat {alertSewa.length} sewa bangunan yang mendekati masa habis kontrak.</p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                if (setSewaFilter) setSewaFilter("expired");
-                setView("bangunan_sewa");
-              }}
-              className="hidden sm:block text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-355 transition-colors bg-white/60 dark:bg-[#2d0f0f]/50 px-3 py-1.5 rounded-lg border border-red-100 dark:border-[#380d0d] hover:bg-white dark:hover:bg-[#2d0f0f]"
-            >
-              Kelola &rarr;
-            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs whitespace-nowrap alert-table">
@@ -466,7 +464,8 @@ export default function BuildingDashboardView({
                   <th className="px-5 py-2.5">Type Bangunan</th>
                   <th className="px-5 py-2.5">Periode Sewa</th>
                   <th className="px-5 py-2.5 text-right">Tanggal Berakhir</th>
-                  <th className="px-5 py-2.5 text-right">Sisa Waktu</th>
+                  <th className="px-5 py-2.5 text-center">Sisa Waktu</th>
+                  <th className="px-5 py-2.5 text-center">Kelola</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-100/50 dark:divide-[#380d0d]">
@@ -476,30 +475,42 @@ export default function BuildingDashboardView({
                     <td className="px-5 py-2.5 text-red-800 dark:text-red-300">{item.type_bangunan || "-"}</td>
                     <td className="px-5 py-2.5 text-red-800 dark:text-red-300 font-medium">{item.periode_sewa || "-"}</td>
                     <td className="px-5 py-2.5 text-right text-red-800 dark:text-red-300">{formatDate(item.tglAkhir)}</td>
-                    <td className="px-5 py-2.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
-                        <Clock className="w-3 h-3" />
-                        {item.sisaHari < 0 
-                          ? (Math.abs(item.sisaHari) <= 30 ? `Sewa Habis (${Math.abs(item.sisaHari)} hari)` : `Sewa Habis (${Math.floor(Math.abs(item.sisaHari)/30)} bln)`)
-                          : `${item.sisaHari} hari`}
+                    <td className="px-5 py-2.5 text-center">
+                      <span className={`inline-flex items-center justify-center gap-1 w-28 px-2 py-0.5 rounded font-bold text-[10px] ${item.sisaHari < 0 ? "bg-red-200 dark:bg-red-950/60 text-red-800 dark:text-red-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span className="border-0 border-none bg-transparent">
+                          {item.sisaHari < 0 
+                            ? (Math.abs(item.sisaHari) <= 30 ? `Sewa Habis (${Math.abs(item.sisaHari)} hari)` : `Sewa Habis (${Math.floor(Math.abs(item.sisaHari)/30)} bln)`)
+                            : `${item.sisaHari} hari`}
+                        </span>
                       </span>
+                    </td>
+                    <td className="px-5 py-2.5 text-center">
+                      <button
+                        onClick={() => {
+                          if (setSewaSearch) setSewaSearch(item.nama_outlet || "");
+                          if (setSewaFilter) setSewaFilter("");
+                          setView("bangunan_sewa");
+                        }}
+                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                      >
+                        Kelola
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {alertSewa.length > 3 && (
-            <div
-              className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
-              onClick={() => {
-                if (setSewaFilter) setSewaFilter("expired");
-                setView("bangunan_sewa");
-              }}
-            >
-              Lihat {alertSewa.length - 3} sewa bangunan lainnya...
-            </div>
-          )}
+          <div
+            className="text-center py-2 bg-red-50 alert-card-footer text-xs text-red-600 dark:text-red-400 font-medium border-t border-red-100/50 dark:border-[#380d0d] cursor-pointer hover:bg-red-100 dark:hover:bg-[#260a0a] transition-colors"
+            onClick={() => {
+              if (setNotificationCategoryFilter) setNotificationCategoryFilter("bangunan");
+              setView("notifikasi");
+            }}
+          >
+            Lihat {alertSewa.length > 3 ? `${alertSewa.length - 3} sewa bangunan lainnya...` : "selengkapnya di Notifikasi..."}
+          </div>
         </div>
       )}
 
@@ -522,13 +533,15 @@ export default function BuildingDashboardView({
               </div>
               <button
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setLandFilter) setLandFilter("");
                   setView("bangunan_tanah");
+                  router.reload({ only: ["buildingLands"] });
                   window.scrollTo(0, 0);
                 }}
                 className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
-                Lihat Selengkapnya &rarr;
+                Lihat Selengkapnya
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -560,7 +573,7 @@ export default function BuildingDashboardView({
                           <td className="px-5 py-2.5 font-semibold text-gray-900">{item.unit_kerja || "—"}</td>
                           <td className="px-5 py-2.5 text-gray-700">{item.peruntukan || "—"}</td>
                           <td className="px-5 py-2.5 text-gray-700 font-mono">{item.no_sertifikat || "—"}</td>
-                          <td className="px-5 py-2.5 text-gray-700 font-mono">{item.no_shgb || "—"}</td>
+                          <td className="px-5 py-2.5 text-gray-700 font-mono whitespace-pre-line leading-tight">{item.no_shgb || "—"}</td>
                           <td className="px-5 py-2.5 text-right font-medium text-gray-800">
                             {item.luas_tanah ? `${Number(item.luas_tanah).toLocaleString("id-ID")} m²` : "—"}
                           </td>
@@ -581,8 +594,8 @@ export default function BuildingDashboardView({
               </table>
             </div>
           </div>
-
-          {/* TABEL SEWA */}
+ 
+           {/* TABEL SEWA */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-150 flex flex-col overflow-hidden">
             <div className="px-5 py-3.5 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
@@ -593,13 +606,15 @@ export default function BuildingDashboardView({
               </div>
               <button
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setSewaFilter) setSewaFilter("");
                   setView("bangunan_sewa");
+                  router.reload({ only: ["buildingSewas"] });
                   window.scrollTo(0, 0);
                 }}
                 className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
-                Lihat Selengkapnya &rarr;
+                Lihat Selengkapnya
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -649,8 +664,8 @@ export default function BuildingDashboardView({
               </table>
             </div>
           </div>
-
-          {/* TABEL RENOVASI */}
+ 
+           {/* TABEL RENOVASI */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-150 flex flex-col overflow-hidden">
             <div className="px-5 py-3.5 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
@@ -661,12 +676,14 @@ export default function BuildingDashboardView({
               </div>
               <button
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   setView("bangunan_renovasi");
+                  router.reload({ only: ["buildingRenovations"] });
                   window.scrollTo(0, 0);
                 }}
                 className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
               >
-                Lihat Selengkapnya &rarr;
+                Lihat Selengkapnya
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -714,13 +731,15 @@ export default function BuildingDashboardView({
 
           {/* Daftar Tanah Stats */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-150 p-5">
-            <h3 className="text-base font-bold text-gray-800 mb-4">Daftar Tanah</h3>
+            <h3 className="text-base font-bold text-gray-800 mb-4">Data Daftar Tanah</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Active Asset Card */}
               <div
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setLandFilter) setLandFilter("active");
                   setView("bangunan_tanah");
+                  router.reload({ only: ["buildingLands"] });
                 }}
                 className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -736,8 +755,10 @@ export default function BuildingDashboardView({
               {/* SHGB Expiring Card */}
               <div
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setLandFilter) setLandFilter("6months");
                   setView("bangunan_tanah");
+                  router.reload({ only: ["buildingLands"] });
                 }}
                 className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -754,13 +775,15 @@ export default function BuildingDashboardView({
 
           {/* Sewa Stats */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-150 p-5">
-            <h3 className="text-base font-bold text-gray-800 mb-4">Sewa</h3>
+            <h3 className="text-base font-bold text-gray-800 mb-4">Data Sewa Bangunan</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Active Lease Card */}
               <div
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setSewaFilter) setSewaFilter("active");
                   setView("bangunan_sewa");
+                  router.reload({ only: ["buildingSewas"] });
                 }}
                 className="bg-green-50/80 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -776,8 +799,10 @@ export default function BuildingDashboardView({
               {/* Expiring Lease Card */}
               <div
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setSewaFilter) setSewaFilter("6months");
                   setView("bangunan_sewa");
+                  router.reload({ only: ["buildingSewas"] });
                 }}
                 className="bg-red-50/80 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -1139,29 +1164,40 @@ export default function BuildingDashboardView({
         </div>
 
         {/* Vertical Bar Chart rendering */}
-        <div className="h-52 flex items-end gap-3 sm:gap-5 px-2 pt-6 pb-2 overflow-x-auto custom-scrollbar">
-          {renovationVendorData.map((d, idx) => {
-            const maxVal = Math.max(...renovationVendorData.map(item => item.value), 1);
-            const heightPct = (d.value / maxVal) * 100;
-            return (
-              <div key={idx} className="flex flex-col items-center flex-1 min-w-[70px] max-w-[120px] group h-full">
-                <div className="w-full flex-1 flex flex-col justify-end relative">
-                  <div
-                    className="w-full bg-[#3b82f6] hover:bg-blue-600 rounded-t-sm transition-all duration-300 relative flex flex-col justify-end shadow-3xs cursor-pointer"
-                    style={{ height: `${heightPct}%`, minHeight: '4px' }}
-                  >
-                    <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-gray-750 bg-white border border-gray-150 px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 whitespace-nowrap pointer-events-none">
-                      {d.value} {d.value > 1 ? "Outlets" : "Outlet"}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[10px] text-gray-500 mt-2 font-bold truncate w-full text-center tracking-tight" title={d.name}>
-                  {d.name}
-                </span>
+        {renovationVendorData.length === 0 ? (
+          <div className="py-8 text-center text-gray-400 italic text-xs">Belum ada data renovasi untuk ditampilkan.</div>
+        ) : (
+          <div className="h-56 relative pt-8 pb-2">
+            {/* Bars container */}
+            <div className="w-full h-[176px] overflow-x-auto custom-scrollbar relative -mt-8 pt-8 px-1">
+              <div className="flex items-end gap-3 sm:gap-5 h-full pb-1 relative">
+                {renovationVendorData.map((d, idx) => {
+                  const maxVal = Math.max(...renovationVendorData.map(item => item.value), 1);
+                  const heightPct = (d.value / maxVal) * 100;
+                  return (
+                    <div key={idx} className="flex flex-col items-center flex-1 min-w-[70px] max-w-[120px] group h-full z-10">
+                      <div className="w-full h-[136px] flex flex-col justify-end relative">
+                        <div
+                          className="w-full bg-[#3b82f6] hover:bg-blue-600 rounded-t-sm transition-all duration-300 relative flex flex-col justify-end shadow-3xs cursor-pointer"
+                          style={{ height: `${heightPct}%`, minHeight: '4px' }}
+                        >
+                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[9px] font-extrabold text-gray-750 dark:text-gray-200 bg-white dark:bg-[#1a2b20] border border-gray-150 dark:border-[#2b4533] px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-15 whitespace-nowrap pointer-events-none">
+                            {d.value} {d.value > 1 ? "Outlets" : "Outlet"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-8 mt-2 w-full flex justify-center items-start">
+                        <span className="text-[10px] text-gray-500 dark:text-[#ffffff] text-center line-clamp-2 leading-tight px-1 font-semibold" title={d.name}>
+                          {d.name}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Toast Notification */}

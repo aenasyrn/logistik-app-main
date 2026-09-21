@@ -10,7 +10,16 @@ class Outlet extends Model
     protected $fillable = [
         'code',
         'nama',
+        'area',
+        'cabang',
         'alamat',
+        'type_outlet',
+        'type_bangunan',
+        'status_gedung',
+        'kelurahan',
+        'kecamatan',
+        'kab_kota',
+        'provinsi',
     ];
 
     public function computers(): HasMany

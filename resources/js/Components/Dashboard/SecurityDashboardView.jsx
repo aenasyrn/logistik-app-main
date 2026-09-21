@@ -3,6 +3,7 @@
 
 import React from "react";
 import { Shield, CheckCircle2, AlertTriangle, Video, BarChart3, Clock, ArrowRight } from "lucide-react";
+import { router } from "@inertiajs/react";
 
 export default function SecurityDashboardView({ securityFacilities = [], setView, setSecurityFilter }) {
   // 1. Calculate online & offline cctv counts
@@ -54,7 +55,7 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
           <div className="bg-white rounded-xl shadow-sm border border-gray-150 p-5">
             <div className="flex items-center gap-2 mb-4">
               <Shield className="w-5 h-5 text-blue-600" />
-              <h3 className="text-base font-bold text-gray-800">Pemantauan CCTV</h3>
+              <h3 className="text-base font-bold text-gray-800">Data Pemantauan CCTV</h3>
             </div>
             
             {/* Stats Grid container like user's request */}
@@ -62,8 +63,10 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
               {/* CCTV Online Card */}
               <div 
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setSecurityFilter) setSecurityFilter("online");
                   setView("bangunan_sarana");
+                  router.reload({ only: ["securityFacilities"] });
                 }}
                 className="bg-green-50/85 hover:bg-green-100/70 p-4 rounded-xl border border-green-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -79,8 +82,10 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
               {/* CCTV Offline Card */}
               <div 
                 onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
                   if (setSecurityFilter) setSecurityFilter("offline");
                   setView("bangunan_sarana");
+                  router.reload({ only: ["securityFacilities"] });
                 }}
                 className="bg-red-50/85 hover:bg-red-100/70 p-4 rounded-xl border border-red-200 transition-all duration-200 flex flex-col justify-between h-28 shadow-3xs cursor-pointer"
               >
@@ -107,10 +112,15 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
                 <h3 className="font-bold text-sm text-gray-800">Data CCTV Terbaru</h3>
               </div>
               <button
-                onClick={() => setView("bangunan_sarana")}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                onClick={() => {
+                  window.dispatchEvent(new Event("reset-all-filters"));
+                  if (setSecurityFilter) setSecurityFilter("");
+                  setView("bangunan_sarana");
+                  router.reload({ only: ["securityFacilities"] });
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
               >
-                Lihat Selengkapnya <ArrowRight className="w-3 h-3" />
+                Lihat Selengkapnya
               </button>
             </div>
             
@@ -118,28 +128,28 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead className="text-gray-700 bg-gray-50 border-b border-gray-100 font-semibold">
                   <tr>
-                    <th className="px-5 py-3 w-12 text-center">No</th>
-                    <th className="px-5 py-3">Nama Unit Kerja</th>
-                    <th className="px-5 py-3">Kantor Cabang</th>
-                    <th className="px-5 py-3">Vendor</th>
-                    <th className="px-5 py-3 text-right">Jumlah Kamera</th>
-                    <th className="px-5 py-3 text-center">Status</th>
+                    <th className="px-3.5 py-3 w-12 text-center">No</th>
+                    <th className="px-3.5 py-3">Nama Unit Kerja</th>
+                    <th className="px-3.5 py-3">Kantor Cabang</th>
+                    <th className="px-3.5 py-3">Vendor</th>
+                    <th className="px-3.5 py-3 text-right">Jumlah Kamera</th>
+                    <th className="px-3.5 py-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {securityFacilities.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-5 py-4 text-center text-gray-400 italic">Belum ada data CCTV.</td>
+                      <td colSpan="6" className="px-3.5 py-4 text-center text-gray-400 italic">Belum ada data CCTV.</td>
                     </tr>
                   ) : (
                     securityFacilities.slice(0, 3).map((item, index) => (
                       <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-5 py-2.5 text-center text-gray-500 font-medium">{index + 1}</td>
-                        <td className="px-5 py-2.5 font-semibold text-gray-900">{item.nama_unit_kerja || "—"}</td>
-                        <td className="px-5 py-2.5 text-gray-700">{item.kantor_cabang || "—"}</td>
-                        <td className="px-5 py-2.5 text-gray-700 truncate max-w-[150px]" title={item.vendor}>{item.vendor || "—"}</td>
-                        <td className="px-5 py-2.5 text-right font-medium text-gray-800">{item.jumlah_kamera ?? 0}</td>
-                        <td className="px-5 py-2.5 text-center">
+                        <td className="px-3.5 py-2.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                        <td className="px-3.5 py-2.5 font-semibold text-gray-900">{item.nama_unit_kerja || "—"}</td>
+                        <td className="px-3.5 py-2.5 text-gray-700">{item.kantor_cabang || "—"}</td>
+                        <td className="px-3.5 py-2.5 text-gray-700 truncate max-w-[150px]" title={item.vendor}>{item.vendor || "—"}</td>
+                        <td className="px-3.5 py-2.5 text-right font-medium text-gray-800">{item.jumlah_kamera ?? 0}</td>
+                        <td className="px-3.5 py-2.5 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded font-bold text-[10px] ${getStatusBadge(item.status)}`}>
                             {item.status || "Offline"}
                           </span>
@@ -167,28 +177,35 @@ export default function SecurityDashboardView({ securityFacilities = [], setView
         {branchData.length === 0 ? (
           <div className="py-8 text-center text-gray-400 italic text-xs">Belum ada data cabang untuk ditampilkan.</div>
         ) : (
-          <div className="h-56 flex items-end gap-3 sm:gap-5 px-2 pt-6 pb-2 overflow-x-auto custom-scrollbar">
-            {branchData.map((d, idx) => {
-              const maxVal = Math.max(...branchData.map(item => item.value), 1);
-              const heightPct = (d.value / maxVal) * 80; // Scale to max 80% to leave room for value label above
-              return (
-                <div key={idx} className="flex flex-col items-center flex-1 min-w-[75px] max-w-[120px] group h-full">
-                  <div className="w-full flex-1 flex flex-col justify-end relative">
-                    <div
-                      className="w-full bg-[#10b981] hover:bg-emerald-600 rounded-t-sm transition-all duration-300 relative flex flex-col justify-end shadow-3xs cursor-pointer"
-                      style={{ height: `${heightPct}%`, minHeight: '4px' }}
-                    >
-                      <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-gray-750 bg-white border border-gray-150 px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 whitespace-nowrap pointer-events-none">
-                        {d.value} CCTV
-                      </span>
+          <div className="h-56 relative pt-8 pb-2">
+            {/* Bars container */}
+            <div className="w-full h-[176px] overflow-x-auto custom-scrollbar relative -mt-8 pt-8 px-1">
+              <div className="flex items-end gap-3 sm:gap-5 h-full pb-1 relative">
+                {branchData.map((d, idx) => {
+                  const maxVal = Math.max(...branchData.map(item => item.value), 1);
+                  const heightPct = (d.value / maxVal) * 100;
+                  return (
+                    <div key={idx} className="flex flex-col items-center flex-1 min-w-[75px] max-w-[120px] group h-full z-10">
+                      <div className="w-full h-[136px] flex flex-col justify-end relative">
+                        <div
+                          className="w-full bg-[#10b981] hover:bg-emerald-600 rounded-t-sm transition-all duration-300 relative flex flex-col justify-end shadow-3xs cursor-pointer"
+                          style={{ height: `${heightPct}%`, minHeight: '4px' }}
+                        >
+                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[9px] font-extrabold text-gray-750 dark:text-gray-200 bg-white dark:bg-[#1a2b20] border border-gray-150 dark:border-[#2b4533] px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-15 whitespace-nowrap pointer-events-none">
+                            {d.value} CCTV
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-8 mt-2 w-full flex justify-center items-start">
+                        <span className="text-[10px] text-gray-500 dark:text-[#ffffff] text-center line-clamp-2 leading-tight px-1 font-semibold" title={d.name}>
+                          {d.name}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-[10px] text-gray-500 mt-2 font-bold truncate w-full text-center tracking-tight" title={d.name}>
-                    {d.name}
-                  </span>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,8 +1,10 @@
 // src/components/DataPerangkat/DataPrinter/PrinterModal.jsx
 "use client";
 
-import React from "react";
-import { X, Loader2 } from "lucide-react";
+import React, { useMemo } from "react";
+import { X, Loader2, Sparkles, Printer, Box, Building2 } from "lucide-react";
+import VendorSelectDropdown from "../../Form/VendorSelectDropdown";
+import CustomSelectDropdown from "../../Form/CustomSelectDropdown";
 
 export default function PrinterModal({
   isOpen,
@@ -10,9 +12,10 @@ export default function PrinterModal({
   formData,
   setFormData,
   isSaving,
-  outletsList,
-  inventoryList,
-  snList,
+  outletsList = [],
+  inventoryList = [],
+  snList = [],
+  vendors = [],
   onClose,
   onSave,
   onOutletChange,
@@ -21,24 +24,75 @@ export default function PrinterModal({
 }) {
   if (!isOpen) return null;
 
+  const labelCls = "block text-xs font-bold text-gray-900 dark:text-white mb-1.5";
+  const inputCls =
+    "w-full h-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] outline-none text-xs text-gray-900 dark:text-white bg-white dark:bg-[#1a2e22] placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all";
+
+  // Prepare rich option objects for Master Barang
+  const inventoryOptions = useMemo(() => {
+    return (inventoryList || []).map((inv) => {
+      const subParts = [];
+      if (inv.vendor_nama || inv.vendor) subParts.push(`Vendor: ${inv.vendor_nama || inv.vendor}`);
+      if (inv.status) subParts.push(`Status: ${inv.status}`);
+      if (inv.tanggal_mulai && inv.tanggal_selesai) {
+        subParts.push(`Periode: ${inv.tanggal_mulai} s/d ${inv.tanggal_selesai}`);
+      }
+      if (inv.kuantitas !== undefined && inv.kuantitas !== null && inv.kuantitas > 0) {
+        subParts.push(`Stok: ${inv.kuantitas} ${inv.satuan || "Unit"}`);
+      }
+      return {
+        id: inv.id,
+        value: inv.nama,
+        label: inv.nama,
+        subtext: subParts.join(" • ") || "Master Barang",
+        raw: inv,
+      };
+    });
+  }, [inventoryList]);
+
+  // Prepare rich option objects for Outlets
+  const outletOptions = useMemo(() => {
+    return (outletsList || []).map((o) => ({
+      id: o.id,
+      value: o.nama,
+      label: o.nama,
+      subtext: `Kode / ID: ${o.id || o.code || "-"}`,
+      raw: o,
+    }));
+  }, [outletsList]);
+
+  // Check if current selected product is from Master Barang
+  const matchedMaster = useMemo(() => {
+    if (!formData.produk) return null;
+    const cleanProd = String(formData.produk).trim().toLowerCase();
+    return (inventoryList || []).find((inv) => inv.nama && inv.nama.toLowerCase() === cleanProd);
+  }, [formData.produk, inventoryList]);
+
   return (
-    // 1. Overlay penuh dengan padding agar tidak menempel di tepi layar HP
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4">
-      
-      {/* 2. Container dibatasi max-height agar tidak menabrak batas layar */}
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white dark:bg-gradient-to-b dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
         
-        {/* ── HEADER: Tetap menempel di atas (shrink-0) ── */}
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-          <h3 className="font-bold text-lg text-gray-800">
-            {editingId ? "Edit Data Printer" : "Tambah Printer Baru"}
-          </h3>
+        {/* ── HEADER ── */}
+        <div className="px-6 py-5 bg-gradient-to-r from-[#0d5c3a] via-[#156e49] to-[#279969] text-white flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/15 rounded-xl border border-white/20">
+              <Printer className="w-5 h-5 text-emerald-200" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base sm:text-lg leading-tight text-white">
+                {editingId ? "Edit Data Printer" : "Tambah Data Printer Baru"}
+              </h3>
+              <p className="text-xs text-emerald-100/90 mt-0.5">
+                {editingId ? "Perbarui detail spesifikasi, lokasi, atau kondisi perangkat." : "Pilih dari Master Data Barang untuk mengisi detail sewa & vendor secara otomatis."}
+              </p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isSaving}
             aria-label="Tutup modal"
-            className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1.5 rounded-lg transition-colors disabled:opacity-50"
+            className="p-1.5 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white/80 hover:text-white disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -47,183 +101,194 @@ export default function PrinterModal({
         {/* Form membungkus Body dan Footer */}
         <form onSubmit={onSave} className="flex flex-col flex-1 overflow-hidden">
           
-          {/* ── BODY: Area form yang bisa di-scroll (overflow-y-auto) ── */}
-          <div className="p-4 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          {/* ── BODY ── */}
+          <div className="p-4 sm:p-5 overflow-y-auto flex-1 custom-scrollbar space-y-4">
+
+            <div className="space-y-4">
               
-              {/* Nama Outlet */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Outlet</label>
-                <input
-                  required
-                  type="text"
-                  list="outlets-suggestions"
-                  value={formData.outlet}
-                  onChange={onOutletChange}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm"
-                  placeholder="Ketik untuk mencari outlet..."
-                />
-                <datalist id="outlets-suggestions">
-                  {outletsList.map((o) => (
-                    <option key={o.id} value={o.nama} />
-                  ))}
-                </datalist>
+              {/* Bagian 1: Lokasi & Master Barang */}
+              <div className="space-y-3 bg-white dark:bg-[#14261c] p-3.5 rounded-xl border border-slate-200/80 dark:border-gray-700 shadow-xs">
+                <h4 className="font-bold text-[11px] text-[#0d5c3a] dark:text-emerald-400 pb-1 uppercase tracking-wide flex items-center gap-1.5 border-b border-emerald-100 dark:border-white/10">
+                  <Building2 className="w-3.5 h-3.5" /> Informasi Lokasi & Master Barang
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
+                  {/* Nama Outlet */}
+                  <div className="sm:col-span-2">
+                    <CustomSelectDropdown
+                      label="Nama Outlet"
+                      labelCls={labelCls}
+                      value={formData.outlet}
+                      onChange={(e) => onOutletChange(e.target ? e.target.value : e)}
+                      onSelect={(o) => onOutletChange(o.nama || o.value || o)}
+                      options={outletOptions}
+                      placeholder="Pilih atau cari outlet..."
+                      disabled={isSaving}
+                      inputCls={inputCls}
+                      allowCustomInput={true}
+                    />
+                  </div>
+
+                  {/* ID Outlet */}
+                  <div className="sm:col-span-1">
+                    <label className={labelCls}>ID Outlet</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={formData.idOutlet || ""}
+                      className={`${inputCls} bg-gray-100 dark:bg-[#14261c] text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed font-medium`}
+                      placeholder="Otomatis"
+                    />
+                  </div>
+
+                  {/* Produk Hardware (dari Master Barang) */}
+                  <div className="sm:col-span-3">
+                    <CustomSelectDropdown
+                      label="Produk Hardware Printer (Master Data Barang)"
+                      labelCls={labelCls}
+                      value={formData.produk}
+                      onChange={(e) => onProdukChange(e.target ? e.target.value : e)}
+                      onSelect={(p) => onProdukChange(p.nama || p.value || p)}
+                      options={inventoryOptions}
+                      placeholder="Pilih dari Master Barang atau ketik..."
+                      disabled={isSaving}
+                      inputCls={`${inputCls} font-medium`}
+                      allowCustomInput={true}
+                    />
+                  </div>
+
+                  {/* Indicator jika terhubung dengan Master Barang */}
+                  {matchedMaster && (
+                    <div className="sm:col-span-3 bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] p-2 rounded-xl flex items-center justify-between gap-2 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>
+                          Terhubung Master Barang: <strong>{matchedMaster.nama}</strong>
+                        </span>
+                      </div>
+                      {matchedMaster.status && (
+                        <span className="text-[10px] bg-white dark:bg-[#1a2e22] text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 shrink-0">
+                          {matchedMaster.status}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Serial Number */}
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Serial Number (SN)</label>
+                    <input
+                      type="text"
+                      value={formData.sn || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, sn: e.target.value }))}
+                      disabled={isSaving}
+                      className={`${inputCls} font-mono`}
+                      placeholder="Masukkan Serial Number (SN)..."
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  {/* Kondisi */}
+                  <div className="sm:col-span-1">
+                    <CustomSelectDropdown
+                      label="Kondisi"
+                      labelCls={labelCls}
+                      value={formData.kondisi || "BAIK"}
+                      onChange={(e) => setFormData((p) => ({ ...p, kondisi: e.target.value }))}
+                      onSelect={(k) => setFormData((p) => ({ ...p, kondisi: k.value || k }))}
+                      options={["BAIK", "KURANG BAIK", "RUSAK"]}
+                      placeholder="Pilih kondisi..."
+                      disabled={isSaving}
+                      inputCls={`${inputCls} font-bold`}
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* ID Outlet */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ID Outlet (Kode)</label>
-                <input
-                  required
-                  type="text"
-                  readOnly
-                  value={formData.idOutlet}
-                  className="w-full px-3 py-2.5 border rounded-lg bg-gray-100 text-gray-500 outline-none cursor-not-allowed text-sm"
-                  placeholder="Otomatis terisi..."
-                />
+              {/* Bagian 2: Vendor & Masa Sewa */}
+              <div className="space-y-3 bg-white dark:bg-[#14261c] p-3.5 rounded-xl border border-slate-200/80 dark:border-gray-700 shadow-xs">
+                <h4 className="font-bold text-[11px] text-blue-700 dark:text-emerald-400 pb-1 uppercase tracking-wide flex items-center gap-1.5 border-b border-blue-100 dark:border-white/10">
+                  <Box className="w-3.5 h-3.5" /> Vendor & Masa Sewa
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Vendor / Penyedia</label>
+                    <VendorSelectDropdown
+                      value={formData.vendor || ""}
+                      onChange={(val) => setFormData((p) => ({ ...p, vendor: val }))}
+                      onSelect={(v) => setFormData((p) => ({ ...p, vendor: v.nama }))}
+                      vendors={vendors}
+                      disabled={isSaving}
+                      placeholder="Pilih atau ketik vendor..."
+                      inputCls={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Tgl Mulai Sewa</label>
+                    <input
+                      type="date"
+                      value={formData.tanggalMulai || ""}
+                      onChange={(e) => onDateChange("tanggalMulai", e.target.value)}
+                      disabled={isSaving}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Tgl Selesai Sewa</label>
+                    <input
+                      type="date"
+                      value={formData.tanggalSelesai || ""}
+                      onChange={(e) => onDateChange("tanggalSelesai", e.target.value)}
+                      disabled={isSaving}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <CustomSelectDropdown
+                      label="Status Perangkat"
+                      value={formData.status || "Inventaris"}
+                      onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
+                      onSelect={(s) => setFormData((p) => ({ ...p, status: s.value || s }))}
+                      options={["Inventaris", "Sewa Berjalan", "Sewa Habis"]}
+                      placeholder="Pilih status..."
+                      disabled={isSaving}
+                      inputCls={`${inputCls} font-medium`}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Keterangan / Catatan</label>
+                    <textarea
+                      rows="2"
+                      value={formData.keterangan || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, keterangan: e.target.value }))}
+                      disabled={isSaving}
+                      className={`${inputCls} resize-none custom-scrollbar`}
+                      placeholder="Isi catatan kondisi, kelengkapan, atau riwayat perbaikan..."
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Produk */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Produk Hardware</label>
-                <input
-                  required
-                  type="text"
-                  list="produk-suggestions"
-                  value={formData.produk}
-                  onChange={onProdukChange}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm"
-                  placeholder="Ketik untuk mencari produk..."
-                />
-                <datalist id="produk-suggestions">
-                  {inventoryList.map((inv) => (
-                    <option key={inv.id} value={inv.nama} />
-                  ))}
-                </datalist>
-              </div>
-
-              {/* Serial Number */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number (SN)</label>
-                <input
-                  required
-                  type="text"
-                  list="sn-suggestions"
-                  value={formData.sn}
-                  onChange={(e) => setFormData((p) => ({ ...p, sn: e.target.value }))}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm font-mono"
-                  placeholder="Ketik atau pilih SN..."
-                />
-                <datalist id="sn-suggestions">
-                  {snList.map((sn, idx) => (
-                    <option key={idx} value={sn} />
-                  ))}
-                </datalist>
-              </div>
-
-              {/* Penyedia */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Penyedia</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.penyedia}
-                  onChange={(e) => setFormData((p) => ({ ...p, penyedia: e.target.value }))}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm"
-                  placeholder="Otomatis terisi jika ada..."
-                />
-              </div>
-
-              {/* Tgl Mulai */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tgl Mulai Sewa</label>
-                <input
-                  type="date"
-                  value={formData.tanggalMulai}
-                  onChange={(e) => onDateChange("tanggalMulai", e.target.value)}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm"
-                />
-              </div>
-
-              {/* Tgl Selesai */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tgl Selesai Sewa</label>
-                <input
-                  type="date"
-                  value={formData.tanggalSelesai}
-                  onChange={(e) => onDateChange("tanggalSelesai", e.target.value)}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm"
-                />
-              </div>
-
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status (Otomatis)</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-100 font-medium text-sm"
-                >
-                  <option value="Inventaris">Inventaris</option>
-                  <option value="Sewa Berjalan">Sewa Berjalan</option>
-                  <option value="Sewa Habis">Sewa Habis</option>
-                </select>
-              </div>
-
-              {/* Kondisi */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kondisi</label>
-                <select
-                  value={formData.kondisi}
-                  onChange={(e) => setFormData((p) => ({ ...p, kondisi: e.target.value }))}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-100 text-sm"
-                >
-                  <option value="BAIK">BAIK</option>
-                  <option value="KURANG BAIK">KURANG BAIK</option>
-                  <option value="RUSAK">RUSAK</option>
-                </select>
-              </div>
-
-              {/* Deskripsi */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi Tambahan</label>
-                <textarea
-                  rows="2"
-                  value={formData.deskripsi}
-                  onChange={(e) => setFormData((p) => ({ ...p, deskripsi: e.target.value }))}
-                  disabled={isSaving}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 text-sm custom-scrollbar"
-                  placeholder="Isi jika ada catatan tambahan..."
-                />
-              </div>
             </div>
           </div>
 
-          {/* ── FOOTER: Tetap menempel di bawah (shrink-0) ── */}
-          <div className="px-4 sm:px-6 py-4 border-t border-gray-100 bg-white shrink-0 flex flex-col-reverse sm:flex-row justify-end gap-3">
+          {/* ── FOOTER ── */}
+          <div className="px-6 py-4 bg-gray-50 dark:bg-[#03140d] border-t border-gray-100 dark:border-white/10 flex justify-end items-center gap-3 shrink-0 rounded-b-2xl sm:rounded-b-3xl">
             <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="w-full sm:w-auto px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors disabled:opacity-50 text-center"
+              className="px-5 py-2.5 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200/70 dark:hover:bg-[#1a2e22] transition-all border border-gray-200 dark:border-gray-600 bg-white dark:bg-[#14261c] cursor-pointer disabled:opacity-50"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 disabled:bg-blue-400"
+              className="px-6 py-2.5 rounded-full text-xs font-bold text-white bg-[#0d5c3a] hover:bg-[#156e49] shadow-md shadow-[#0d5c3a]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editingId ? "Simpan Perubahan" : "Simpan Printer"}
+              {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {editingId ? "Simpan Perubahan" : "Tambah Printer"}
             </button>
           </div>
 

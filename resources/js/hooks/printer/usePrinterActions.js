@@ -1,55 +1,44 @@
 // src/hooks/printer/usePrinterActions.js
 import { useRef } from "react";
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { importPrinterCSV, downloadTemplate } from "../../services/printerService";
+import { parseExcelFile } from "../../utils/excelHelper";
 
 const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
 
 export function usePrinterActions({ filteredData, setIsSaving, showNotif }) {
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    showNotif("Sedang memproses dan mengunggah CSV...");
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        try {
-          const total = await importPrinterCSV(APP_ID, data);
-          showNotif(`Sukses! ${total} data printer berhasil di-import. Memuat ulang...`);
-          setTimeout(() => window.location.reload(), 2000);
-        } catch (err) {
-          console.error(err);
-          showNotif("Gagal import! Pastikan kolom header persis seperti template.", "error");
-        } finally {
-          setIsSaving(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-      },
-      error: (err) => {
-        console.error(err);
-        showNotif("Gagal membaca file CSV.", "error");
-        setIsSaving(false);
-      },
-    });
+    try {
+      const data = await parseExcelFile(file);
+      const total = await importPrinterCSV(APP_ID, data);
+      showNotif(`Sukses! ${total} data printer berhasil di-import.`, "success");
+    } catch (err) {
+      console.error(err);
+      const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan file Excel valid dan kolom header sesuai template.";
+      showNotif(errorMsg, "error");
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const exportToExcel = () => {
     const rows = filteredData.map((item) => ({
-      "Outlet":           item.outlet         || "",
       "ID Outlet":        item.idOutlet       || "",
+      "Outlet":           item.outlet         || "",
       "Produk / Model":   item.produk         || "",
       "Serial Number":    item.sn             || "",
       "Kondisi":          item.kondisi        || "",
-      "Vendor":           item.penyedia       || "",
+      "Vendor":           item.vendor         || "",
       "Tgl Mulai Sewa":   item.tanggalMulai   || "",
       "Tgl Selesai Sewa": item.tanggalSelesai || "",
       "Status":           item.status         || "",
-      "Catatan":          item.deskripsi      || "",
+      "Keterangan":       item.keterangan     || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);

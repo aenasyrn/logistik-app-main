@@ -2,25 +2,123 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Map, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Upload } from "lucide-react";
+import { Map, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Upload, Eye, MapPin, FileText } from "lucide-react";
+import DetailHistoryModal from "../../Common/DetailHistoryModal";
 import axios from "axios";
 import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
-import Papa from "papaparse";
+import { parseExcelFile } from "../../../utils/excelHelper";
 
 import ConfirmDeleteModal from "../../Modal/ConfirmDeleteModal";
 import ToastNotif from "../../Modal/ToastNotif";
 import { importLandCSV, downloadLandTemplate } from "../../../services/landService";
+import CustomSelectDropdown from "../../Form/CustomSelectDropdown";
 
-export default function DaftarTanah({ userRole, lands = [], landFilter = "", setLandFilter }) {
-  const [searchQuery, setSearchQuery] = useState("");
+const SearchableSelect = ({ label, value, onChange, options, placeholder, disabled, className, labelCls }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef(null);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const filteredOptions = options.filter(opt =>
+    opt.nama?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const exactMatch = options.some(opt => opt.nama?.toLowerCase() === search.toLowerCase());
+  const showCustomOption = search.trim() !== "" && !exactMatch;
+
+  return (
+    <div ref={containerRef} className="relative w-full text-left">
+      <label className={labelCls}>{label}</label>
+      <div
+        onClick={() => { if (!disabled) { setIsOpen(!isOpen); setSearch(""); } }}
+        className={`w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer flex justify-between items-center text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || placeholder}
+        </span>
+        <svg className="w-4 h-4 text-gray-400 shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto flex flex-col p-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari..."
+            className="w-full px-3 py-1.5 mb-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+          />
+          <div className="overflow-y-auto max-h-48 custom-scrollbar">
+            {showCustomOption && (
+              <div
+                onClick={() => {
+                  onChange({ target: { value: search } });
+                  setIsOpen(false);
+                }}
+                className="px-3.5 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors font-medium text-left"
+              >
+                Gunakan: "{search}"
+              </div>
+            )}
+            {filteredOptions.length === 0 && !showCustomOption ? (
+              <div className="p-2 text-sm text-gray-500 text-center">Tidak ada hasil</div>
+            ) : (
+              filteredOptions.map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => {
+                    onChange({ target: { value: opt.nama } });
+                    setIsOpen(false);
+                  }}
+                  className="px-3.5 py-2 text-sm text-gray-700 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors text-left"
+                >
+                  {opt.nama}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function DaftarTanah({ userRole, lands = [], outlets = [], landFilter = "", setLandFilter, landSearch = "", setLandSearch }) {
+  const isGuest = userRole === "guest";
+  const canModify = userRole === "admin";
+  const [searchQuery, setSearchQuery] = useState(landSearch || "");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [filterStatusShgb, setFilterStatusShgb] = useState("all");
+
+  React.useEffect(() => {
+    if (landSearch !== undefined) {
+      setSearchQuery(landSearch);
+      setCurrentPage(1);
+    }
+  }, [landSearch]);
 
   React.useEffect(() => {
     const handleReset = () => {
       setSearchQuery("");
       setCurrentPage(1);
+      setSelectedUnit(null);
+      setSelectedCell({ id: null, field: null });
+      setFilterStatusShgb("all");
     };
     window.addEventListener("reset-all-filters", handleReset);
     return () => window.removeEventListener("reset-all-filters", handleReset);
@@ -32,6 +130,19 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
   const [selectedCell, setSelectedCell] = useState({ id: null, field: null });
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [hoveredGroupNo, setHoveredGroupNo] = useState(null);
+
+  const createEmptyCert = () => ({
+    no_shgb: "",
+    no_sertifikat: "",
+    tgl_mulai_shgb: "",
+    tgl_berakhir_shgb: "",
+    no_imb: "",
+    nama_pemilik_imb: "",
+    tahun_perolehan: "",
+    luas_tanah: "",
+    luas_pagar: "",
+    luas_bangunan: "",
+  });
 
   const [formData, setFormData] = useState({
     unit_kerja: "",
@@ -50,27 +161,107 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
     luas_pagar: "",
     luas_bangunan: "",
     keterangan: "",
+    certificates: [createEmptyCert()],
   });
 
-  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
-  const [notif, setNotif] = useState({ show: false, message: "", type: "success" });
+  const updateCertificatesAndMerge = (certs) => {
+    const firstCert = certs[0] || {};
+    const isMulti = certs.length > 1;
+    const allCertNo = certs.map((c) => (c.no_sertifikat || c.no_shgb || "").trim()).filter(Boolean);
+    const allImbNo = certs.map((c) => (c.no_imb || "").trim()).filter(Boolean);
+    const allPemilikImb = [...new Set(certs.map((c) => (c.nama_pemilik_imb || "").trim()).filter(Boolean))];
 
-  const showNotif = (message, type = "success") => {
-    setNotif({ show: true, message, type });
+    setFormData((prev) => ({
+      ...prev,
+      certificates: certs,
+      no_shgb: firstCert.no_shgb || "",
+      no_sertifikat: firstCert.no_sertifikat || "",
+      no_sertifikat_gabungan: isMulti
+        ? (prev.no_sertifikat_gabungan || allCertNo.join(", "))
+        : "",
+      no_imb: isMulti
+        ? (prev.no_imb || allImbNo.join(", "))
+        : (firstCert.no_imb || prev.no_imb || ""),
+      nama_pemilik_imb: isMulti
+        ? (prev.nama_pemilik_imb || allPemilikImb.join(", "))
+        : (firstCert.nama_pemilik_imb || prev.nama_pemilik_imb || ""),
+      tgl_mulai_shgb: firstCert.tgl_mulai_shgb || prev.tgl_mulai_shgb || "",
+      tgl_berakhir_shgb: firstCert.tgl_berakhir_shgb || prev.tgl_berakhir_shgb || "",
+      tahun_perolehan: firstCert.tahun_perolehan !== undefined ? firstCert.tahun_perolehan : (prev.tahun_perolehan || ""),
+      luas_tanah: firstCert.luas_tanah !== undefined ? firstCert.luas_tanah : (prev.luas_tanah || ""),
+      luas_pagar: firstCert.luas_pagar !== undefined ? firstCert.luas_pagar : (prev.luas_pagar || ""),
+      luas_bangunan: firstCert.luas_bangunan !== undefined ? firstCert.luas_bangunan : (prev.luas_bangunan || ""),
+    }));
+  };
+
+  const handleAddCertificate = () => {
+    const updatedCerts = [...(formData.certificates || []), createEmptyCert()];
+    updateCertificatesAndMerge(updatedCerts);
+  };
+
+  const handleRemoveCertificate = (index) => {
+    if ((formData.certificates || []).length <= 1) return;
+    const updatedCerts = (formData.certificates || []).filter((_, i) => i !== index);
+    updateCertificatesAndMerge(updatedCerts);
+  };
+
+  const handleCertificateChange = (index, field, val) => {
+    const certs = [...(formData.certificates || [])];
+    certs[index] = { ...certs[index], [field]: val };
+    updateCertificatesAndMerge(certs);
+  };
+
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
+  const [notif, setNotif] = useState({ show: false, message: "", type: "success", onOk: null });
+  const [localStatuses, setLocalStatuses] = useState({});
+  const [detailItem, setDetailItem] = useState(null);
+
+  const showNotif = (message, type = "success", onOk = null) => {
+    setNotif({ show: true, message, type, onOk });
+  };
+
+  const handleStatusChange = async (id, newStatus) => {
+    const oldStatus = localStatuses[id] !== undefined
+      ? localStatuses[id]
+      : (lands.find(l => l.id === id)?.status || getStatusInfo(lands.find(l => l.id === id)));
+
+    setLocalStatuses(prev => ({ ...prev, [id]: newStatus }));
+
+    try {
+      await axios.put(`/building-lands/${id}/status`, { status: newStatus });
+      router.reload({
+        only: ["buildingLands", "activityLogs"],
+        onSuccess: () => {
+          setLocalStatuses(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      showNotif("Gagal mengubah status.", "error");
+      setLocalStatuses(prev => ({ ...prev, [id]: oldStatus }));
+    }
   };
 
   const uniqueUnits = [...new Set(lands.map((item) => item.unit_kerja).filter(Boolean))];
 
   const handleUnitKerjaChange = (e) => {
     const value = e.target.value;
+    const matched = outlets.find((o) => o.nama.toLowerCase() === value.toLowerCase());
     setFormData((p) => {
-      const updated = { ...p, unit_kerja: value };
-      if (!editingId && value) {
+      const updated = {
+        ...p,
+        unit_kerja: value,
+        outlet_id: matched ? matched.id : "",
+      };
+      if (!editingId) {
         const existing = lands.find(
           (l) => (l.unit_kerja || "").toLowerCase().trim() === value.toLowerCase().trim()
         );
         if (existing) {
-          updated.alamat = existing.alamat || "";
           updated.no_imb = existing.no_imb || "";
           updated.nama_pemilik_imb = existing.nama_pemilik_imb || "";
           updated.luas_pagar = existing.luas_pagar !== null && existing.luas_pagar !== undefined ? String(existing.luas_pagar) : "";
@@ -101,7 +292,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
   const getCellClass = (item, field, extraClass = "") => {
     const isSelected = isItemSelected(item);
     const isEven = item._isEvenGroup;
-    const isGroupHovered = hoveredGroupNo === item._visualNo;
+    const isGroupHovered = hoveredGroupNo === item._groupVisualNo;
 
     let bgClass = "";
     if (isSelected) {
@@ -131,6 +322,69 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
     tglSelesai.setHours(0, 0, 0, 0);
     const diffTime = tglSelesai.getTime() - hariIni.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const hitungSisaWaktu = (tanggalSelesai) => {
+    if (!tanggalSelesai) return "—";
+    const hariIni = new Date();
+    hariIni.setHours(0, 0, 0, 0);
+    const tglSelesai = new Date(tanggalSelesai);
+    tglSelesai.setHours(0, 0, 0, 0);
+
+    if (tglSelesai < hariIni) {
+      const diffTime = hariIni.getTime() - tglSelesai.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays <= 30) {
+        return `> ${diffDays} hari`;
+      } else {
+        const diffMonths = (hariIni.getFullYear() - tglSelesai.getFullYear()) * 12 + (hariIni.getMonth() - tglSelesai.getMonth());
+        return `> ${diffMonths > 0 ? diffMonths : 0} bln`;
+      }
+    }
+
+    const diffTime = tglSelesai.getTime() - hariIni.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 30) {
+      return `< ${diffDays} hari`;
+    } else {
+      const diffMonths = (tglSelesai.getFullYear() - hariIni.getFullYear()) * 12 + (tglSelesai.getMonth() - hariIni.getMonth());
+      return `${diffMonths > 0 ? diffMonths : 0} bln`;
+    }
+  };
+
+  const getStatusInfo = (land) => {
+    if (land.status === "Done" || land.status === "Selesai") return "Selesai";
+    if (!land.tgl_berakhir_shgb) return "Aktif";
+    const hariIni = new Date();
+    hariIni.setHours(0, 0, 0, 0);
+    const tglSelesai = new Date(land.tgl_berakhir_shgb);
+    tglSelesai.setHours(0, 0, 0, 0);
+
+    if (tglSelesai < hariIni) return "Habis Masa Berlaku";
+
+    const diffTime = tglSelesai.getTime() - hariIni.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 30) return "Hampir Habis";
+    return "Aktif";
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "Selesai":
+      case "Done":
+        return "bg-blue-100 text-blue-800 border-blue-300 font-extrabold shadow-sm";
+      case "Aktif":
+        return "bg-green-50 text-green-700 border-green-200";
+      case "Hampir Habis":
+        return "bg-red-50 text-red-700 border-red-200";
+      case "Habis Masa Berlaku":
+      case "Expired":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-50 text-gray-600 border-gray-200";
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -164,6 +418,19 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
       }
     }
 
+    if (filterStatusShgb !== "all") {
+      const statusInfo = getStatusInfo(item);
+      if (filterStatusShgb === "aktif") {
+        if (statusInfo !== "Aktif") return false;
+      } else if (filterStatusShgb === "hampir_habis") {
+        if (statusInfo !== "Hampir Habis") return false;
+      } else if (filterStatusShgb === "expired") {
+        if (statusInfo !== "Habis Masa Berlaku") return false;
+      } else if (filterStatusShgb === "selesai") {
+        if (statusInfo !== "Selesai") return false;
+      }
+    }
+
     const q = searchQuery.toLowerCase();
 
     // Format dates to match display format (dd/mm/yyyy)
@@ -175,11 +442,16 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
     const luasPagarFormatted = item.luas_pagar ? Number(item.luas_pagar).toLocaleString("id-ID").toLowerCase() : "";
     const luasBangunanFormatted = item.luas_bangunan ? Number(item.luas_bangunan).toLocaleString("id-ID").toLowerCase() : "";
 
+    const calculatedStatus = getStatusInfo(item);
+    const calculatedSisaWaktu = hitungSisaWaktu(item.tgl_berakhir_shgb);
+
     return (
       (item.no && String(item.no).includes(q)) ||
       (item.unit_kerja && item.unit_kerja.toLowerCase().includes(q)) ||
       (item.alamat && item.alamat.toLowerCase().includes(q)) ||
       (item.peruntukan && item.peruntukan.toLowerCase().includes(q)) ||
+      (calculatedStatus && calculatedStatus.toLowerCase().includes(q)) ||
+      (calculatedSisaWaktu && calculatedSisaWaktu.toLowerCase().includes(q)) ||
       (item.aset_sap && item.aset_sap.toLowerCase().includes(q)) ||
       (item.no_shgb && item.no_shgb.toLowerCase().includes(q)) ||
       (item.no_sertifikat && item.no_sertifikat.toLowerCase().includes(q)) ||
@@ -210,36 +482,24 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     }
 
-    const noA = a.no !== null && a.no !== undefined ? Number(a.no) : -999999;
-    const noB = b.no !== null && b.no !== undefined ? Number(b.no) : -999999;
-    if (noA !== noB) return noB - noA;
+    const unitA = (a.unit_kerja || "").trim().toLowerCase();
+    const unitB = (b.unit_kerja || "").trim().toLowerCase();
 
-    const unitA = (a.unit_kerja || "").toLowerCase();
-    const unitB = (b.unit_kerja || "").toLowerCase();
-    if (unitA !== unitB) return unitA.localeCompare(unitB);
-
-    return b.id - a.id;
-  });
-
-  // Group the sortedLands by unit_kerja to paginate by groups (visual rows)
-  const groupedLands = [];
-  let currentGroup = null;
-  sortedLands.forEach((item) => {
-    if (!currentGroup || currentGroup.unit_kerja !== item.unit_kerja) {
-      currentGroup = {
-        unit_kerja: item.unit_kerja,
-        items: [item],
-      };
-      groupedLands.push(currentGroup);
-    } else {
-      currentGroup.items.push(item);
+    // Group by unit_kerja first so multiple certificates for the same unit sit together for rowSpan merging
+    if (unitA !== unitB) {
+      const noA = a.no !== null && a.no !== undefined ? Number(a.no) : 999999;
+      const noB = b.no !== null && b.no !== undefined ? Number(b.no) : 999999;
+      if (noA !== noB) return noA - noB;
+      return unitA.localeCompare(unitB);
     }
+
+    return a.id - b.id;
   });
 
-  // Pagination based on groups
-  const totalPages = Math.ceil(groupedLands.length / itemsPerPage);
+  // Pagination based on sortedLands directly
+  const totalPages = Math.ceil(sortedLands.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedGroups = groupedLands.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedDataRaw = sortedLands.slice(startIndex, startIndex + itemsPerPage);
 
   const getVisiblePages = () => {
     const maxVisible = 5;
@@ -262,65 +522,44 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
     return pages;
   };
 
-  // Flatten back to items and assign group-based properties
-  const paginatedData = paginatedGroups.flatMap((group, groupIdx) => {
-    const visualNo = startIndex + groupIdx + 1;
-    const isEvenGroup = visualNo % 2 === 0;
-    return group.items.map((item) => ({
-      ...item,
-      _visualNo: visualNo,
-      _isEvenGroup: isEvenGroup,
-    }));
-  });
+  const paginatedData = [];
+  let currentGroupValue = null;
+  let currentGroupStartIndex = -1;
+  let visualNoCounter = startIndex + 1;
 
-  // Helper to calculate rowspan info for paginatedData
-  const getRowSpanInfo = (data) => {
-    const info = [];
-    let i = 0;
-    while (i < data.length) {
-      const currentUnit = data[i].unit_kerja;
-      let j = i;
-      while (j < data.length && data[j].unit_kerja === currentUnit) {
-        j++;
-      }
-      const groupSize = j - i;
-      const groupRows = data.slice(i, j);
+  for (let i = 0; i < paginatedDataRaw.length; i++) {
+    const item = paginatedDataRaw[i];
+    const groupValue = (item.unit_kerja || "").trim().toLowerCase();
 
-      const getUniqueValue = (field) => {
-        const vals = groupRows
-          .map(r => r[field])
-          .filter(v => v !== null && v !== undefined && String(v).trim() !== "" && String(v).trim() !== "-");
-        const uniqueVals = [...new Set(vals)];
-        if (uniqueVals.length === 1) {
-          return { merge: true, value: uniqueVals[0] };
-        } else if (uniqueVals.length === 0) {
-          return { merge: true, value: "-" };
-        } else {
-          return { merge: false };
-        }
-      };
+    if (groupValue === "" || groupValue !== currentGroupValue) {
+      currentGroupValue = groupValue;
+      currentGroupStartIndex = paginatedData.length;
 
-      for (let k = i; k < j; k++) {
-        info[k] = {
-          isFirst: k === i,
-          span: groupSize,
-          no_imb: getUniqueValue("no_imb"),
-          nama_pemilik_imb: getUniqueValue("nama_pemilik_imb"),
-          no_sertifikat_gabungan: getUniqueValue("no_sertifikat_gabungan"),
-          luas_pagar: getUniqueValue("luas_pagar"),
-          luas_bangunan: getUniqueValue("luas_bangunan"),
-        };
-      }
-      i = j;
+      paginatedData.push({
+        ...item,
+        _rowSpan: 1,
+        _isFirstInGroup: true,
+        _groupVisualNo: visualNoCounter++,
+        _isEvenGroup: (visualNoCounter - 1) % 2 === 0,
+      });
+    } else {
+      paginatedData[currentGroupStartIndex]._rowSpan += 1;
+
+      paginatedData.push({
+        ...item,
+        _rowSpan: 0,
+        _isFirstInGroup: false,
+        _groupVisualNo: paginatedData[currentGroupStartIndex]._groupVisualNo,
+        _isEvenGroup: paginatedData[currentGroupStartIndex]._isEvenGroup,
+      });
     }
-    return info;
-  };
+  }
 
-  const rowSpanInfo = getRowSpanInfo(paginatedData);
 
   const openAdd = () => {
     setEditingId(null);
     setFormData({
+      outlet_id: "",
       unit_kerja: "",
       alamat: "",
       peruntukan: "",
@@ -337,13 +576,44 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
       luas_pagar: "",
       luas_bangunan: "",
       keterangan: "",
+      certificates: [createEmptyCert()],
     });
     setIsModalOpen(true);
   };
 
   const openEdit = (item) => {
     setEditingId(item.id);
+    const relatedRecords = lands.filter(
+      (l) => l.unit_kerja && item.unit_kerja && l.unit_kerja.trim().toLowerCase() === item.unit_kerja.trim().toLowerCase()
+    );
+    const certsToLoad = relatedRecords.length > 0
+      ? relatedRecords.map((r) => ({
+        no_shgb: r.no_shgb || "",
+        no_sertifikat: r.no_sertifikat || "",
+        tgl_mulai_shgb: r.tgl_mulai_shgb || "",
+        tgl_berakhir_shgb: r.tgl_berakhir_shgb || "",
+        no_imb: r.no_imb || "",
+        nama_pemilik_imb: r.nama_pemilik_imb || "",
+        tahun_perolehan: r.tahun_perolehan !== null && r.tahun_perolehan !== undefined ? String(r.tahun_perolehan) : "",
+        luas_tanah: r.luas_tanah !== null && r.luas_tanah !== undefined ? String(r.luas_tanah) : "",
+        luas_pagar: r.luas_pagar !== null && r.luas_pagar !== undefined ? String(r.luas_pagar) : "",
+        luas_bangunan: r.luas_bangunan !== null && r.luas_bangunan !== undefined ? String(r.luas_bangunan) : "",
+      }))
+      : [{
+        no_shgb: item.no_shgb || "",
+        no_sertifikat: item.no_sertifikat || "",
+        tgl_mulai_shgb: item.tgl_mulai_shgb || "",
+        tgl_berakhir_shgb: item.tgl_berakhir_shgb || "",
+        no_imb: item.no_imb || "",
+        nama_pemilik_imb: item.nama_pemilik_imb || "",
+        tahun_perolehan: item.tahun_perolehan !== null && item.tahun_perolehan !== undefined ? String(item.tahun_perolehan) : "",
+        luas_tanah: item.luas_tanah !== null && item.luas_tanah !== undefined ? String(item.luas_tanah) : "",
+        luas_pagar: item.luas_pagar !== null && item.luas_pagar !== undefined ? String(item.luas_pagar) : "",
+        luas_bangunan: item.luas_bangunan !== null && item.luas_bangunan !== undefined ? String(item.luas_bangunan) : "",
+      }];
+
     setFormData({
+      outlet_id: item.outlet_id || "",
       unit_kerja: item.unit_kerja || "",
       alamat: item.alamat || "",
       peruntukan: item.peruntukan || "",
@@ -360,6 +630,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
       luas_pagar: item.luas_pagar !== null && item.luas_pagar !== undefined ? String(item.luas_pagar) : "",
       luas_bangunan: item.luas_bangunan !== null && item.luas_bangunan !== undefined ? String(item.luas_bangunan) : "",
       keterangan: item.keterangan || "",
+      certificates: certsToLoad,
     });
     setIsModalOpen(true);
   };
@@ -387,25 +658,48 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
   const handleSave = (e) => {
     e.preventDefault();
+    if (!formData.unit_kerja?.trim()) {
+      showNotif("Unit Kerja wajib diisi!", "error");
+      return;
+    }
     setIsSaving(true);
 
+    const cleanedCerts = (formData.certificates || []).map((c) => ({
+      no_shgb: c.no_shgb?.trim() || null,
+      no_sertifikat: c.no_sertifikat?.trim() || null,
+      tgl_mulai_shgb: c.tgl_mulai_shgb || null,
+      tgl_berakhir_shgb: c.tgl_berakhir_shgb || null,
+      no_imb: c.no_imb?.trim() || null,
+      nama_pemilik_imb: c.nama_pemilik_imb?.trim() || null,
+      tahun_perolehan: (c.tahun_perolehan !== "" && c.tahun_perolehan !== null && !isNaN(Number(c.tahun_perolehan))) ? Number(c.tahun_perolehan) : null,
+      luas_tanah: (c.luas_tanah !== "" && c.luas_tanah !== null && !isNaN(Number(c.luas_tanah))) ? Number(c.luas_tanah) : null,
+      luas_pagar: (c.luas_pagar !== "" && c.luas_pagar !== null && !isNaN(Number(c.luas_pagar))) ? Number(c.luas_pagar) : null,
+      luas_bangunan: (c.luas_bangunan !== "" && c.luas_bangunan !== null && !isNaN(Number(c.luas_bangunan))) ? Number(c.luas_bangunan) : null,
+    }));
+
+    const firstCert = cleanedCerts[0] || {};
+    const isMulti = cleanedCerts.length > 1;
+
     const payload = {
-      unit_kerja: formData.unit_kerja,
-      alamat: formData.alamat,
-      peruntukan: formData.peruntukan,
-      aset_sap: formData.aset_sap,
-      no_shgb: formData.no_shgb,
-      no_sertifikat: formData.no_sertifikat,
-      no_sertifikat_gabungan: formData.no_sertifikat_gabungan,
-      no_imb: formData.no_imb,
-      nama_pemilik_imb: formData.nama_pemilik_imb,
-      tgl_mulai_shgb: formData.tgl_mulai_shgb || null,
-      tgl_berakhir_shgb: formData.tgl_berakhir_shgb || null,
-      tahun_perolehan: formData.tahun_perolehan ? Number(formData.tahun_perolehan) : null,
-      luas_tanah: formData.luas_tanah ? Number(formData.luas_tanah) : null,
-      luas_pagar: formData.luas_pagar ? Number(formData.luas_pagar) : null,
-      luas_bangunan: formData.luas_bangunan ? Number(formData.luas_bangunan) : null,
-      keterangan: formData.keterangan,
+      outlet_id: (formData.outlet_id && !isNaN(Number(formData.outlet_id))) ? Number(formData.outlet_id) : null,
+      unit_kerja: formData.unit_kerja?.trim(),
+      alamat: formData.alamat?.trim() || null,
+      peruntukan: formData.peruntukan?.trim() || null,
+      aset_sap: formData.aset_sap?.trim() || null,
+      no_shgb: firstCert.no_shgb || formData.no_shgb?.trim() || null,
+      no_sertifikat: firstCert.no_sertifikat || formData.no_sertifikat?.trim() || null,
+      no_sertifikat_gabungan: isMulti ? (formData.no_sertifikat_gabungan?.trim() || null) : null,
+      no_imb: isMulti ? (formData.no_imb?.trim() || null) : (firstCert.no_imb || formData.no_imb?.trim() || null),
+      nama_pemilik_imb: isMulti ? (formData.nama_pemilik_imb?.trim() || null) : (firstCert.nama_pemilik_imb || formData.nama_pemilik_imb?.trim() || null),
+      tgl_mulai_shgb: firstCert.tgl_mulai_shgb || formData.tgl_mulai_shgb || null,
+      tgl_berakhir_shgb: firstCert.tgl_berakhir_shgb || formData.tgl_berakhir_shgb || null,
+      tahun_perolehan: firstCert.tahun_perolehan !== null && firstCert.tahun_perolehan !== undefined ? firstCert.tahun_perolehan : (formData.tahun_perolehan ? Number(formData.tahun_perolehan) : null),
+      luas_tanah: firstCert.luas_tanah !== null && firstCert.luas_tanah !== undefined ? firstCert.luas_tanah : (formData.luas_tanah ? Number(formData.luas_tanah) : null),
+      luas_pagar: firstCert.luas_pagar !== null && firstCert.luas_pagar !== undefined ? firstCert.luas_pagar : (formData.luas_pagar ? Number(formData.luas_pagar) : null),
+      luas_bangunan: firstCert.luas_bangunan !== null && firstCert.luas_bangunan !== undefined ? firstCert.luas_bangunan : (formData.luas_bangunan ? Number(formData.luas_bangunan) : null),
+      keterangan: formData.keterangan?.trim() || null,
+      certificates: cleanedCerts,
+      mode_edit: formData.mode_edit || "koreksi",
     };
 
     if (editingId) {
@@ -468,32 +762,23 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    showNotif("Sedang memproses dan mengunggah CSV...");
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        try {
-          const total = await importLandCSV("logistikku_app_01", data);
-          showNotif(`Sukses! ${total} data tanah berhasil di-import.`);
-        } catch (err) {
-          console.error(err);
-          showNotif("Gagal import! Pastikan kolom header persis seperti template.", "error");
-        } finally {
-          setIsSaving(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-      },
-      error: (err) => {
-        console.error(err);
-        showNotif("Gagal membaca file CSV.", "error");
-        setIsSaving(false);
-      },
-    });
+    try {
+      const data = await parseExcelFile(file);
+      const total = await importLandCSV("logistikku_app_01", data);
+      showNotif(`Sukses! ${total} data tanah berhasil di-import.`, "success", () => {
+        router.reload({ only: ['buildingLands'] });
+      });
+    } catch (err) {
+      console.error(err);
+      showNotif(err.response?.data?.message || err.message || "Gagal import! Pastikan file Excel valid dan kolom header sesuai template.", "error");
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -504,7 +789,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-              <Map className="w-6 h-6 text-blue-500" /> Daftar Tanah
+              <Map className="w-6 h-6 text-[#0d5c3a] dark:text-emerald-400" /> Daftar Tanah
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               Manajemen inventaris aset tanah instansi beserta sertifikat dan penggunaannya.
@@ -516,18 +801,18 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
               type="button"
               onClick={exportToExcel}
               disabled={filteredLands.length === 0}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+              className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] disabled:bg-[#279969]/50 text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-            {userRole === "admin" && (
+            {!isGuest && (
               <>
                 <button
                   type="button"
                   onClick={downloadLandTemplate}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+                  className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                  <FileSpreadsheet className="w-4 h-4" /> Template Excel
                 </button>
                 <button
                   type="button"
@@ -535,15 +820,15 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
                   disabled={isSaving}
                   className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import CSV
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import Excel
                 </button>
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".xlsx, .xls, .csv"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
                   className="hidden"
-                  aria-label="Upload file CSV data tanah"
+                  aria-label="Upload file Excel data tanah"
                 />
               </>
             )}
@@ -553,54 +838,94 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
         {/* Tabel Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Search Toolbar */}
-          <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/30 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-              <div className="relative w-full sm:w-80">
-                <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
-                <input
-                  type="text"
-                  placeholder="Cari data tanah..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3 flex-1">
+                {/* Search Bar */}
+                <div className="relative w-full sm:w-80">
+                  <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    placeholder="Cari data tanah..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+                  />
+                </div>
+
+                {/* Show Entries Dropdown */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span>Show</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={10000}>All</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+
+                {/* Reset Filters button if any filter active */}
+                {(filterStatusShgb !== "all" || searchQuery !== "") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilterStatusShgb("all");
+                      setCurrentPage(1);
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 cursor-pointer"
+                  >
+                    Reset Filter
+                  </button>
+                )}
               </div>
 
-              {/* Show Entries Dropdown */}
-              <div className="flex items-center gap-1.5 text-xs text-gray-600 self-start sm:self-auto">
-                <span>Show</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={10000}>All</option>
-                </select>
-                <span>entries</span>
+              <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+                {!isGuest && (
+                  <button
+                    type="button"
+                    onClick={openAdd}
+                    className="flex items-center gap-2 bg-[#0d5c3a] hover:bg-[#0a462c] text-white px-5 py-2 rounded-full font-bold shadow-md shadow-[#0d5c3a]/20 transition-all text-xs shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Tanah
+                  </button>
+                )}
+                <div className="bg-emerald-50 text-[#0d5c3a] dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 px-4 py-2 rounded-full text-xs font-bold shrink-0">
+                  Total Lahan: {filteredLands.length}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {userRole === "admin" && (
-                <button
-                  type="button"
-                  onClick={openAdd}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+
+            {/* Filter Dropdowns Grid */}
+            <div className="flex flex-wrap gap-4 border-t border-gray-100 pt-3">
+              {/* Status SHGB Filter */}
+              <div className="w-full sm:w-60">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 pl-1">Status SHGB</label>
+                <select
+                  value={filterStatusShgb}
+                  onChange={(e) => {
+                    setFilterStatusShgb(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs shadow-sm cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Tanah
-                </button>
-              )}
-              <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
-                Total Lahan: {filteredLands.length}
+                  <option value="all">Semua Status SHGB</option>
+                  <option value="aktif">Aktif</option>
+                  <option value="hampir_habis">Hampir Habis</option>
+                  <option value="expired">Habis Masa Berlaku</option>
+                  <option value="selesai">Selesai</option>
+                </select>
               </div>
             </div>
           </div>
@@ -642,37 +967,61 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
           )}
 
           {/* Table */}
-          <div className={`overflow-x-auto custom-scrollbar ${itemsPerPage > 20 ? "max-h-[60vh] overflow-y-auto" : ""}`}>
-            <table className="w-full text-left border-collapse min-w-[2000px]">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-                  <th rowSpan="2" className="p-2.5 w-12 text-center align-middle border border-blue-800 bg-blue-900">No</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Unit Kerja</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Alamat</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Peruntukan</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aset SAP</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">No. SHGB</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">No. Sertifikat</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">No. Sertifikat Gabungan</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">No. IMB</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Nama Pemilik IMB</th>
-                  <th colSpan="2" className="p-1.5 text-center border border-blue-800 bg-blue-900">Tanggal SHGB</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Tahun Perolehan</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Luas Tanah (m²)</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Luas Pagar (m²)</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Luas Bangunan (m²)</th>
-                  <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Keterangan</th>
-                  {userRole === "admin" && <th rowSpan="2" className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>}
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[2230px] table-fixed">
+              <colgroup>
+                <col className="w-[50px]" />
+                <col className="w-[150px]" />
+                <col className="w-[220px]" />
+                <col className="w-[120px]" />
+                <col className="w-[80px]" /> {/* Sisa Waktu */}
+                <col className="w-[150px]" /> {/* Status */}
+                <col className="w-[110px]" />
+                <col className="w-[110px]" />
+                <col className="w-[110px]" />
+                <col className="w-[120px]" />
+                <col className="w-[110px]" />
+                <col className="w-[140px]" />
+                <col className="w-[100px]" /> {/* Mulai */}
+                <col className="w-[100px]" /> {/* Berakhir */}
+                <col className="w-[90px]" />
+                <col className="w-[110px]" />
+                <col className="w-[110px]" />
+                <col className="w-[130px]" />
+                <col className="w-[150px]" />
+                <col className="w-[100px]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-[#0d5c3a] text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+                  <th rowSpan="2" className="p-2.5 w-[50px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No</th>
+                  <th rowSpan="2" className="p-2.5 w-[150px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Unit Kerja</th>
+                  <th rowSpan="2" className="p-2.5 w-[220px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Alamat</th>
+                  <th rowSpan="2" className="p-2.5 w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Peruntukan</th>
+                  <th rowSpan="2" className="p-2.5 w-[80px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Sisa Waktu</th>
+                  <th rowSpan="2" className="p-2.5 w-[150px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Status</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Aset SAP</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No. SHGB</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No. Sertifikat</th>
+                  <th rowSpan="2" className="p-2.5 w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No. Sertifikat Gabungan</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No. IMB</th>
+                  <th rowSpan="2" className="p-2.5 w-[140px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Nama Pemilik IMB</th>
+                  <th colSpan="2" className="p-1.5 text-center border border-[#0a4228] bg-[#0d5c3a]">Tanggal SHGB</th>
+                  <th rowSpan="2" className="p-2.5 w-[90px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Tahun Perolehan</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Luas Tanah (m²)</th>
+                  <th rowSpan="2" className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Luas Pagar (m²)</th>
+                  <th rowSpan="2" className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Luas Bangunan (m²)</th>
+                  <th rowSpan="2" className="p-2.5 w-[150px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Keterangan</th>
+                  <th rowSpan="2" className="p-2.5 w-[100px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Aksi</th>
                 </tr>
-                <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-                  <th className="p-1.5 text-center border border-blue-800 bg-blue-900">Mulai</th>
-                  <th className="p-1.5 text-center border border-blue-800 bg-blue-900">Berakhir</th>
+                <tr className="bg-[#0d5c3a] text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+                  <th className="p-1.5 w-[90px] text-center border border-[#0a4228] bg-[#0d5c3a]">Mulai</th>
+                  <th className="p-1.5 w-[90px] text-center border border-[#0a4228] bg-[#0d5c3a]">Berakhir</th>
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-800 bg-white">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan="18" className="p-4 text-center text-gray-400 border border-slate-200">
+                    <td colSpan="20" className="p-4 text-center text-gray-400 border border-slate-200">
                       Tidak ada data lahan ditemukan.
                     </td>
                   </tr>
@@ -684,243 +1033,304 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
                     return (
                       <tr
                         key={item.id}
-                        onMouseEnter={() => setHoveredGroupNo(item._visualNo)}
+                        onMouseEnter={() => setHoveredGroupNo(item._groupVisualNo)}
                         onMouseLeave={() => setHoveredGroupNo(null)}
                       >
-                        {/* No (#) - Merged */}
-                        {rowSpanInfo[index].isFirst ? (
+                        {/* No (#) */}
+                        {item._isFirstInGroup && (
                           <td
-                            rowSpan={rowSpanInfo[index].span}
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "no")}
-                            className={getCellClass(item, "no", "text-center font-semibold bg-white/70")}
+                            className={getCellClass(item, "no", "text-center font-semibold bg-white/70 truncate align-middle")}
+                            title={item._groupVisualNo}
                           >
-                            {item._visualNo}
+                            {item._groupVisualNo}
                           </td>
-                        ) : null}
+                        )}
 
-                        {/* Unit Kerja - Merged */}
-                        {rowSpanInfo[index].isFirst ? (
+                        {/* Unit Kerja */}
+                        {item._isFirstInGroup && (
                           <td
-                            rowSpan={rowSpanInfo[index].span}
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "unit_kerja")}
-                            className={getCellClass(item, "unit_kerja", "font-semibold text-gray-900 bg-white/70")}
+                            className={getCellClass(item, "unit_kerja", "font-semibold text-gray-900 bg-white/70 whitespace-normal break-words align-middle")}
+                            title={item.unit_kerja || "-"}
                           >
-                            {item.unit_kerja}
+                            {item.unit_kerja || "-"}
                           </td>
-                        ) : null}
+                        )}
 
-                        {/* Alamat - Merged */}
-                        {rowSpanInfo[index].isFirst ? (
+                        {/* Alamat */}
+                        {item._isFirstInGroup && (
                           <td
-                            rowSpan={rowSpanInfo[index].span}
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "alamat")}
-                            className={getCellClass(item, "alamat", "max-w-xs truncate bg-white/70")}
+                            className={getCellClass(item, "alamat", "whitespace-normal break-words bg-white/70 align-middle")}
                             title={item.alamat}
                           >
                             {item.alamat || "-"}
                           </td>
-                        ) : null}
+                        )}
 
-                        {/* Peruntukan - Not Merged */}
+                        {/* Peruntukan */}
                         <td
                           onClick={() => handleCellClick(item.id, "peruntukan")}
-                          className={getCellClass(item, "peruntukan")}
+                          className={getCellClass(item, "peruntukan", "whitespace-normal break-words")}
+                          title={item.peruntukan || "-"}
                         >
                           {item.peruntukan || "-"}
                         </td>
 
-                        {/* Aset SAP - Not Merged */}
+                        {/* Sisa Waktu */}
+                        <td
+                          onClick={() => handleCellClick(item.id, "sisa_waktu")}
+                          className={getCellClass(item, "sisa_waktu", "text-center font-medium text-xs bg-white/70")}
+                          title={hitungSisaWaktu(item.tgl_berakhir_shgb)}
+                        >
+                          <span className={(getStatusInfo(item) === "Hampir Habis" || getStatusInfo(item) === "Habis Masa Berlaku") ? "text-red-600 font-bold" : "text-gray-700"}>
+                            {hitungSisaWaktu(item.tgl_berakhir_shgb)}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td
+                          className={getCellClass(item, "status", "text-center")}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {(() => {
+                            const status = getStatusInfo(item);
+                            const originalStatus = item.status === "Done" || item.status === "Selesai" ? "Selesai" : status;
+                            const currentStatus = localStatuses[item.id] !== undefined
+                              ? localStatuses[item.id]
+                              : originalStatus;
+
+                            const displayStatus = currentStatus === "Done" || currentStatus === "Selesai"
+                              ? "Selesai"
+                              : (currentStatus === "Expired" || currentStatus === "Habis Masa Berlaku" ? "Habis Masa Berlaku" : currentStatus);
+
+                            if (isGuest) {
+                              return (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${getStatusBadge(currentStatus)}`} style={{ minWidth: '105px', textAlign: 'center' }}>
+                                  {displayStatus}
+                                </span>
+                              );
+                            }
+
+                            if (originalStatus === "Habis Masa Berlaku" || originalStatus === "Expired") {
+                              return (
+                                <select
+                                  value={displayStatus === "Selesai" ? "Selesai" : "Habis Masa Berlaku"}
+                                  onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                                  className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                                  style={{ minWidth: '105px', textAlignLast: 'center' }}
+                                >
+                                  <option value="Habis Masa Berlaku" className="bg-white text-gray-800">Habis Masa Berlaku</option>
+                                  <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                                </select>
+                              );
+                            } else if (originalStatus === "Hampir Habis") {
+                              return (
+                                <select
+                                  value={displayStatus}
+                                  onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                                  className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                                  style={{ minWidth: '105px', textAlignLast: 'center' }}
+                                >
+                                  <option value="Hampir Habis" className="bg-white text-gray-800">Hampir Habis</option>
+                                  <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                                </select>
+                              );
+                            } else if (originalStatus === "Selesai") {
+                              const naturalStatus = getStatusInfo({ ...item, status: null });
+                              return (
+                                <select
+                                  value={displayStatus === "Selesai" ? "Selesai" : (naturalStatus === "Expired" || naturalStatus === "Habis Masa Berlaku" ? "Habis Masa Berlaku" : naturalStatus)}
+                                  onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                                  className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                                  style={{ minWidth: '105px', textAlignLast: 'center' }}
+                                >
+                                  <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                                  <option value={naturalStatus === "Expired" || naturalStatus === "Habis Masa Berlaku" ? "Habis Masa Berlaku" : naturalStatus} className="bg-white text-gray-800">
+                                    {naturalStatus === "Expired" || naturalStatus === "Habis Masa Berlaku" ? "Habis Masa Berlaku" : naturalStatus}
+                                  </option>
+                                </select>
+                              );
+                            } else {
+                              return (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${getStatusBadge(currentStatus)}`} style={{ minWidth: '105px', textAlign: 'center' }}>
+                                  {displayStatus}
+                                </span>
+                              );
+                            }
+                          })()}
+                        </td>
+
+                        {/* Aset SAP */}
                         <td
                           onClick={() => handleCellClick(item.id, "aset_sap")}
-                          className={getCellClass(item, "aset_sap")}
+                          className={getCellClass(item, "aset_sap", "whitespace-normal break-words")}
+                          title={item.aset_sap || "-"}
                         >
                           {item.aset_sap || "-"}
                         </td>
 
-                        {/* No. SHGB - Not Merged */}
+                        {/* No. SHGB */}
                         <td
                           onClick={() => handleCellClick(item.id, "no_shgb")}
-                          className={getCellClass(item, "no_shgb")}
+                          className={getCellClass(item, "no_shgb", "whitespace-pre-line break-words leading-tight")}
+                          title={item.no_shgb || "-"}
                         >
                           {item.no_shgb || "-"}
                         </td>
 
-                        {/* No. Sertifikat - Not Merged */}
+                        {/* No. Sertifikat */}
                         <td
                           onClick={() => handleCellClick(item.id, "no_sertifikat")}
-                          className={getCellClass(item, "no_sertifikat")}
+                          className={getCellClass(item, "no_sertifikat", "whitespace-normal break-words")}
+                          title={item.no_sertifikat || "-"}
                         >
                           {item.no_sertifikat || "-"}
                         </td>
 
-                        {/* No. Sertifikat Gabungan - Dynamically Merged */}
-                        {rowSpanInfo[index].no_sertifikat_gabungan.merge ? (
-                          rowSpanInfo[index].isFirst ? (
-                            <td
-                              rowSpan={rowSpanInfo[index].span}
-                              onClick={() => handleCellClick(item.id, "no_sertifikat_gabungan")}
-                              className={getCellClass(item, "no_sertifikat_gabungan", "bg-white/70")}
-                            >
-                              {rowSpanInfo[index].no_sertifikat_gabungan.value}
-                            </td>
-                          ) : null
-                        ) : (
+                        {/* No. Sertifikat Gabungan */}
+                        {item._isFirstInGroup && (
                           <td
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "no_sertifikat_gabungan")}
-                            className={getCellClass(item, "no_sertifikat_gabungan")}
+                            className={getCellClass(item, "no_sertifikat_gabungan", "whitespace-normal break-words font-semibold text-blue-900 bg-white/70 align-middle")}
+                            title={item.no_sertifikat_gabungan || "-"}
                           >
                             {item.no_sertifikat_gabungan || "-"}
                           </td>
                         )}
 
-                        {/* No. IMB - Merged */}
-                        {rowSpanInfo[index].no_imb.merge ? (
-                          rowSpanInfo[index].isFirst ? (
-                            <td
-                              rowSpan={rowSpanInfo[index].span}
-                              onClick={() => handleCellClick(item.id, "no_imb")}
-                              className={getCellClass(item, "no_imb", "bg-white/70")}
-                            >
-                              {rowSpanInfo[index].no_imb.value}
-                            </td>
-                          ) : null
-                        ) : (
+                        {/* No. IMB */}
+                        {item._isFirstInGroup && (
                           <td
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "no_imb")}
-                            className={getCellClass(item, "no_imb")}
+                            className={getCellClass(item, "no_imb", "whitespace-normal break-words bg-white/70 align-middle")}
+                            title={item.no_imb || "-"}
                           >
                             {item.no_imb || "-"}
                           </td>
                         )}
 
-                        {/* Nama Pemilik IMB - Merged */}
-                        {rowSpanInfo[index].nama_pemilik_imb.merge ? (
-                          rowSpanInfo[index].isFirst ? (
-                            <td
-                              rowSpan={rowSpanInfo[index].span}
-                              onClick={() => handleCellClick(item.id, "nama_pemilik_imb")}
-                              className={getCellClass(item, "nama_pemilik_imb", "bg-white/70")}
-                            >
-                              {rowSpanInfo[index].nama_pemilik_imb.value}
-                            </td>
-                          ) : null
-                        ) : (
+                        {/* Nama Pemilik IMB */}
+                        {item._isFirstInGroup && (
                           <td
+                            rowSpan={item._rowSpan}
                             onClick={() => handleCellClick(item.id, "nama_pemilik_imb")}
-                            className={getCellClass(item, "nama_pemilik_imb")}
+                            className={getCellClass(item, "nama_pemilik_imb", "whitespace-normal break-words bg-white/70 align-middle")}
+                            title={item.nama_pemilik_imb || "-"}
                           >
                             {item.nama_pemilik_imb || "-"}
                           </td>
                         )}
 
-                        {/* Tanggal SHGB Mulai - Not Merged */}
+                        {/* Tanggal SHGB Mulai */}
                         <td
                           onClick={() => handleCellClick(item.id, "tgl_mulai_shgb")}
                           className={getCellClass(item, "tgl_mulai_shgb", "text-center")}
+                          title={formatDate(item.tgl_mulai_shgb)}
                         >
                           {formatDate(item.tgl_mulai_shgb)}
                         </td>
 
-                        {/* Tanggal SHGB Berakhir - Not Merged */}
+                        {/* Tanggal SHGB Berakhir */}
                         <td
                           onClick={() => handleCellClick(item.id, "tgl_berakhir_shgb")}
                           className={getCellClass(item, "tgl_berakhir_shgb", "text-center")}
+                          title={formatDate(item.tgl_berakhir_shgb)}
                         >
                           {formatDate(item.tgl_berakhir_shgb)}
                         </td>
 
-                        {/* Tahun Perolehan - Not Merged */}
+                        {/* Tahun Perolehan */}
                         <td
                           onClick={() => handleCellClick(item.id, "tahun_perolehan")}
                           className={getCellClass(item, "tahun_perolehan", "text-center font-medium")}
+                          title={item.tahun_perolehan || "-"}
                         >
                           {item.tahun_perolehan || "-"}
                         </td>
 
-                        {/* Luas Lahan (m²) - Not Merged */}
+                        {/* Luas Lahan (m²) */}
                         <td
                           onClick={() => handleCellClick(item.id, "luas_tanah")}
                           className={getCellClass(item, "luas_tanah", "font-medium")}
+                          title={item.luas_tanah ? `${Number(item.luas_tanah).toLocaleString("id-ID")} m²` : "-"}
                         >
                           {item.luas_tanah ? `${Number(item.luas_tanah).toLocaleString("id-ID")} m²` : "-"}
                         </td>
 
-                        {/* Luas Pagar (m²) - Dynamically Merged */}
-                        {rowSpanInfo[index].luas_pagar.merge ? (
-                          rowSpanInfo[index].isFirst ? (
-                            <td
-                              rowSpan={rowSpanInfo[index].span}
-                              onClick={() => handleCellClick(item.id, "luas_pagar")}
-                              className={getCellClass(item, "luas_pagar", "font-medium bg-white/70")}
-                            >
-                              {rowSpanInfo[index].luas_pagar.value !== "-" ? `${Number(rowSpanInfo[index].luas_pagar.value).toLocaleString("id-ID")} m²` : "-"}
-                            </td>
-                          ) : null
-                        ) : (
-                          <td
-                            onClick={() => handleCellClick(item.id, "luas_pagar")}
-                            className={getCellClass(item, "luas_pagar", "font-medium")}
-                          >
-                            {item.luas_pagar ? `${Number(item.luas_pagar).toLocaleString("id-ID")} m²` : "-"}
-                          </td>
-                        )}
+                        {/* Luas Pagar (m²) */}
+                        <td
+                          onClick={() => handleCellClick(item.id, "luas_pagar")}
+                          className={getCellClass(item, "luas_pagar", "font-medium")}
+                          title={item.luas_pagar ? `${Number(item.luas_pagar).toLocaleString("id-ID")} m²` : "-"}
+                        >
+                          {item.luas_pagar ? `${Number(item.luas_pagar).toLocaleString("id-ID")} m²` : "-"}
+                        </td>
 
-                        {/* Luas Bangunan (m²) - Dynamically Merged */}
-                        {rowSpanInfo[index].luas_bangunan.merge ? (
-                          rowSpanInfo[index].isFirst ? (
-                            <td
-                              rowSpan={rowSpanInfo[index].span}
-                              onClick={() => handleCellClick(item.id, "luas_bangunan")}
-                              className={getCellClass(item, "luas_bangunan", "font-medium bg-white/70")}
-                            >
-                              {rowSpanInfo[index].luas_bangunan.value !== "-" ? `${Number(rowSpanInfo[index].luas_bangunan.value).toLocaleString("id-ID")} m²` : "-"}
-                            </td>
-                          ) : null
-                        ) : (
-                          <td
-                            onClick={() => handleCellClick(item.id, "luas_bangunan")}
-                            className={getCellClass(item, "luas_bangunan", "font-medium")}
-                          >
-                            {item.luas_bangunan ? `${Number(item.luas_bangunan).toLocaleString("id-ID")} m²` : "-"}
-                          </td>
-                        )}
+                        {/* Luas Bangunan (m²) */}
+                        <td
+                          onClick={() => handleCellClick(item.id, "luas_bangunan")}
+                          className={getCellClass(item, "luas_bangunan", "font-medium")}
+                          title={item.luas_bangunan ? `${Number(item.luas_bangunan).toLocaleString("id-ID")} m²` : "-"}
+                        >
+                          {item.luas_bangunan ? `${Number(item.luas_bangunan).toLocaleString("id-ID")} m²` : "-"}
+                        </td>
 
-                        {/* Keterangan - Not Merged */}
+                        {/* Keterangan */}
                         <td
                           onClick={() => handleCellClick(item.id, "keterangan")}
-                          className={getCellClass(item, "keterangan", "text-[10px] text-gray-500 max-w-xs truncate")}
+                          className={getCellClass(item, "keterangan", "text-[10px] text-gray-500 whitespace-normal break-words")}
                           title={item.keterangan}
                         >
                           {item.keterangan || "-"}
                         </td>
 
-                        {/* Aksi - Not Merged */}
-                        {userRole === "admin" && (
-                          <td className={getCellClass(item, "aksi", "text-right")}>
-                            <div className="flex justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEdit(item);
-                                }}
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  askDelete(item.id, item.unit_kerja);
-                                }}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
+                        {/* Aksi */}
+                        <td className={getCellClass(item, "aksi", "text-center")}>
+                          <div className="flex justify-center items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailItem(item);
+                              }}
+                              title="Detail & Riwayat SHGB"
+                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            {canModify && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEdit(item);
+                                  }}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    askDelete(item.id, item.unit_kerja);
+                                  }}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -933,7 +1343,7 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
           {totalPages > 1 && (
             <div className="px-6 py-4 border-t border-slate-200/80 flex items-center justify-between bg-slate-50/30">
               <span className="text-xs text-gray-500">
-                Menampilkan {startIndex + 1} sampai {Math.min(startIndex + itemsPerPage, groupedLands.length)} dari {groupedLands.length} data
+                Menampilkan {startIndex + 1} sampai {Math.min(startIndex + itemsPerPage, sortedLands.length)} dari {sortedLands.length} data
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -970,76 +1380,127 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
 
       {/* Form Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="font-bold text-lg text-gray-800">
-                {editingId ? "Edit Aset Tanah" : "Tambah Aset Tanah Baru"}
-              </h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white dark:bg-gradient-to-b dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+            
+            {/* Header */}
+            <div className="px-6 py-5 bg-gradient-to-r from-[#0d5c3a] via-[#156e49] to-[#279969] text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/15 rounded-xl border border-white/20">
+                  <Map className="w-5 h-5 text-emerald-200" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base sm:text-lg leading-tight text-white">
+                    {editingId ? "Edit Data Aset Tanah" : "Tambah Data Aset Tanah Baru"}
+                  </h3>
+                  <p className="text-xs text-emerald-100/90 mt-0.5">
+                    Pilih nama unit kerja untuk mengisi informasi tanah, legalitas SHGB, dan IMB secara otomatis.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 disabled={isSaving}
-                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg"
+                aria-label="Tutup modal"
+                className="p-1.5 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white/80 hover:text-white disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
-              <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-6">
+              <div className="p-4 sm:p-5 overflow-y-auto flex-1 custom-scrollbar space-y-4">
 
-                {/* Section 1: Informasi Umum */}
-                <div>
-                  <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">1. Informasi Umum</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Unit Kerja *</label>
-                      <input
-                        required
-                        type="text"
-                        list="unit-kerja-list"
-                        value={formData.unit_kerja}
-                        onChange={handleUnitKerjaChange}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Contoh: KC Palembang..."
-                      />
-                      <datalist id="unit-kerja-list">
-                        {uniqueUnits.map((unit) => (
-                          <option key={unit} value={unit} />
-                        ))}
-                      </datalist>
+                {/* Mode Edit Choice (Only when editing) */}
+                {editingId && (
+                  <div className="bg-blue-50/70 dark:bg-[#14261c] border border-blue-200 dark:border-gray-700 rounded-xl p-3 mb-1">
+                    <label className="block text-xs font-bold text-blue-900 dark:text-white mb-2">
+                      Tujuan Pengubahan Data:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <label className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ${formData.mode_edit === 'koreksi' || !formData.mode_edit ? 'bg-white dark:bg-[#1a2e22] border-blue-500 dark:border-blue-400 font-semibold text-blue-900 dark:text-blue-300 shadow-2xs' : 'bg-white/50 dark:bg-[#1a2e22]/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-[#1a2e22]'}`}>
+                        <input
+                          type="radio"
+                          name="mode_edit"
+                          value="koreksi"
+                          checked={formData.mode_edit === 'koreksi' || !formData.mode_edit}
+                          onChange={() => setFormData(p => ({ ...p, mode_edit: 'koreksi' }))}
+                          className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                          <span className="block font-semibold">Koreksi / Perbaiki Data</span>
+                          <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">Mengedit kesalahan data (tanpa simpan riwayat)</span>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ${formData.mode_edit === 'perpanjang' ? 'bg-white dark:bg-[#1a2e22] border-emerald-500 dark:border-emerald-400 font-semibold text-emerald-900 dark:text-emerald-300 shadow-2xs' : 'bg-white/50 dark:bg-[#1a2e22]/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-[#1a2e22]'}`}>
+                        <input
+                          type="radio"
+                          name="mode_edit"
+                          value="perpanjang"
+                          checked={formData.mode_edit === 'perpanjang'}
+                          onChange={() => setFormData(p => ({ ...p, mode_edit: 'perpanjang' }))}
+                          className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <div>
+                          <span className="block font-semibold text-emerald-700 dark:text-emerald-400">Perpanjang Masa SHGB</span>
+                          <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">Memperpanjang SHGB (simpan riwayat lama)</span>
+                        </div>
+                      </label>
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Alamat</label>
+                  </div>
+                )}
+
+                {/* Section 1: Informasi Umum & Lahan */}
+                <div className="space-y-3 bg-white dark:bg-[#14261c] p-3.5 sm:p-4 rounded-xl border border-slate-200/80 dark:border-gray-700 shadow-xs">
+                  <h4 className="font-bold text-[11px] text-[#0d5c3a] dark:text-emerald-400 pb-1 uppercase tracking-wide flex items-center gap-1.5 border-b border-emerald-100 dark:border-white/10">
+                    <MapPin className="w-3.5 h-3.5" /> 1. Informasi Umum & Wilayah
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="sm:col-span-2">
+                      <CustomSelectDropdown
+                        label="Unit Kerja *"
+                        labelCls="block text-[11px] font-bold text-gray-900 dark:text-white mb-1"
+                        value={formData.unit_kerja}
+                        onChange={(e) => handleUnitKerjaChange(e.target ? e.target.value : e)}
+                        onSelect={(u) => handleUnitKerjaChange(u.nama || u.value)}
+                        options={outlets.map((o) => ({ id: o.id, nama: o.nama }))}
+                        placeholder="Pilih atau ketik Unit Kerja..."
+                        disabled={isSaving}
+                        allowCustomInput={true}
+                        inputCls="w-full px-3.5 py-2.5 bg-white dark:bg-[#1a2e22] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Alamat</label>
                       <textarea
                         rows="2"
                         value={formData.alamat}
                         onChange={(e) => setFormData((p) => ({ ...p, alamat: e.target.value }))}
                         disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1a2e22] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none custom-scrollbar transition-all"
                         placeholder="Alamat lengkap lahan..."
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Peruntukan</label>
+                      <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Peruntukan</label>
                       <input
                         type="text"
                         value={formData.peruntukan}
                         onChange={(e) => setFormData((p) => ({ ...p, peruntukan: e.target.value }))}
                         disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1a2e22] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
                         placeholder="Contoh: Kantor Cabang, Gudang..."
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Aset SAP</label>
+                      <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Aset SAP</label>
                       <input
                         type="text"
                         value={formData.aset_sap}
                         onChange={(e) => setFormData((p) => ({ ...p, aset_sap: e.target.value }))}
                         disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1a2e22] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
                         placeholder="Nomor Aset SAP..."
                       />
                     </div>
@@ -1047,169 +1508,280 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
                 </div>
 
                 {/* Section 2: Legalitas & Sertifikat */}
-                <div className="border-t border-gray-100 pt-5">
-                  <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">2. Legalitas & Sertifikat</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3.5 bg-white dark:bg-[#14261c] p-3.5 sm:p-4 rounded-xl border border-slate-200/80 dark:border-gray-700 shadow-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-emerald-100 dark:border-white/10">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. SHGB</label>
-                      <input
-                        type="text"
-                        value={formData.no_shgb}
-                        onChange={(e) => setFormData((p) => ({ ...p, no_shgb: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Nomor SHGB..."
-                      />
+                      <h4 className="font-bold text-[11px] text-[#0d5c3a] dark:text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5" /> 2. Legalitas & Sertifikat
+                      </h4>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        Tambahkan satu atau beberapa dokumen sertifikat/legalitas untuk aset tanah ini.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. Sertifikat</label>
-                      <input
-                        type="text"
-                        value={formData.no_sertifikat}
-                        onChange={(e) => setFormData((p) => ({ ...p, no_sertifikat: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Nomor Sertifikat..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. Sertifikat Gabungan</label>
-                      <input
-                        type="text"
-                        value={formData.no_sertifikat_gabungan}
-                        onChange={(e) => setFormData((p) => ({ ...p, no_sertifikat_gabungan: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Nomor Sertifikat Gabungan..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. IMB</label>
-                      <input
-                        type="text"
-                        value={formData.no_imb}
-                        onChange={(e) => setFormData((p) => ({ ...p, no_imb: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Nomor IMB..."
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Nama Pemilik IMB</label>
-                      <input
-                        type="text"
-                        value={formData.nama_pemilik_imb}
-                        onChange={(e) => setFormData((p) => ({ ...p, nama_pemilik_imb: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Nama pemilik yang tertera di IMB..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tanggal SHGB Mulai</label>
-                      <input
-                        type="date"
-                        value={formData.tgl_mulai_shgb}
-                        onChange={(e) => setFormData((p) => ({ ...p, tgl_mulai_shgb: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tanggal SHGB Berakhir</label>
-                      <input
-                        type="date"
-                        value={formData.tgl_berakhir_shgb}
-                        onChange={(e) => setFormData((p) => ({ ...p, tgl_berakhir_shgb: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCertificate}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 bg-emerald-50 dark:bg-[#1a2e22] hover:bg-emerald-100 dark:hover:bg-[#213b2c] text-[#0d5c3a] dark:text-emerald-300 font-bold px-3 py-1.5 rounded-xl text-xs transition-colors border border-emerald-200 dark:border-emerald-700 shadow-2xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Tambah Sertifikat</span>
+                    </button>
                   </div>
+
+                  {/* List of Certificate Items */}
+                  <div className="space-y-3.5">
+                    {(formData.certificates || []).map((cert, idx) => (
+                      <div key={idx} className="p-3 sm:p-3.5 bg-slate-50/70 dark:bg-[#1a2e22]/50 rounded-xl border border-slate-200/80 dark:border-gray-700/80 space-y-3 relative transition-all">
+                        {/* Certificate Item Header */}
+                        <div className="flex items-center justify-between pb-1.5 border-b border-gray-200/70 dark:border-white/10">
+                          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[#0d5c3a] text-white text-[10px] flex items-center justify-center font-bold">
+                              {idx + 1}
+                            </span>
+                            Sertifikat #{idx + 1}
+                          </span>
+                          {(formData.certificates || []).length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCertificate(idx)}
+                              disabled={isSaving}
+                              className="flex items-center gap-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-colors text-xs font-bold cursor-pointer"
+                              title="Hapus Sertifikat Ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Dokumen SHGB */}
+                        <div className="space-y-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">No. SHGB</label>
+                              <textarea
+                                rows={2}
+                                value={cert.no_shgb || ""}
+                                onChange={(e) => handleCertificateChange(idx, "no_shgb", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-1.5 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all resize-none whitespace-pre-line leading-relaxed"
+                                placeholder={"Contoh:\nHGB NO.781\nAT954504"}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">No. Sertifikat</label>
+                              <input
+                                type="text"
+                                value={cert.no_sertifikat || ""}
+                                onChange={(e) => handleCertificateChange(idx, "no_sertifikat", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: 00012/Kramat..."
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Tanggal SHGB Mulai</label>
+                              <input
+                                type="date"
+                                value={cert.tgl_mulai_shgb || ""}
+                                onChange={(e) => handleCertificateChange(idx, "tgl_mulai_shgb", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white shadow-2xs transition-all"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Tanggal SHGB Berakhir</label>
+                              <input
+                                type="date"
+                                value={cert.tgl_berakhir_shgb || ""}
+                                onChange={(e) => handleCertificateChange(idx, "tgl_berakhir_shgb", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white shadow-2xs transition-all"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Dokumen IMB */}
+                        <div className="pt-2 border-t border-gray-200/60 dark:border-white/5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">No. IMB</label>
+                              <input
+                                type="text"
+                                value={cert.no_imb || ""}
+                                onChange={(e) => handleCertificateChange(idx, "no_imb", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: IMB-2020/001..."
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Nama Pemilik IMB</label>
+                              <input
+                                type="text"
+                                value={cert.nama_pemilik_imb || ""}
+                                onChange={(e) => handleCertificateChange(idx, "nama_pemilik_imb", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Masukkan nama pemilik IMB..."
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Dimensi & Spesifikasi Fisik */}
+                        <div className="pt-2 border-t border-gray-200/60 dark:border-white/5">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Thn Perolehan</label>
+                              <input
+                                type="number"
+                                value={cert.tahun_perolehan || ""}
+                                onChange={(e) => handleCertificateChange(idx, "tahun_perolehan", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: 2020"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Luas Tanah (m²)</label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={cert.luas_tanah || ""}
+                                onChange={(e) => handleCertificateChange(idx, "luas_tanah", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: 500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Luas Bangunan (m²)</label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={cert.luas_bangunan || ""}
+                                onChange={(e) => handleCertificateChange(idx, "luas_bangunan", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: 250"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Luas Pagar (m²)</label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={cert.luas_pagar || ""}
+                                onChange={(e) => handleCertificateChange(idx, "luas_pagar", e.target.value)}
+                                disabled={isSaving}
+                                className="w-full px-3 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs transition-all"
+                                placeholder="Contoh: 150"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary / Manual Input Box for Merged Info (Only shown if > 1 certificate) */}
+                  {(formData.certificates || []).length > 1 && (
+                    <div className="p-3 sm:p-3.5 bg-blue-50/70 dark:bg-[#1a2e22]/70 rounded-xl border border-blue-200/80 dark:border-gray-700 space-y-2.5 animate-in fade-in duration-200 shadow-xs">
+                      <div className="flex items-center justify-between pb-1 border-b border-blue-200/60 dark:border-white/10">
+                        <span className="text-xs font-extrabold text-blue-900 dark:text-emerald-400 uppercase tracking-wider block">
+                          Hasil Gabungan ({(formData.certificates || []).length} Sertifikat)
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">
+                            No. Sertifikat Gabungan
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.no_sertifikat_gabungan || ""}
+                            onChange={(e) => setFormData((p) => ({ ...p, no_sertifikat_gabungan: e.target.value }))}
+                            disabled={isSaving}
+                            className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+                            placeholder="Masukkan nomor sertifikat gabungan..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">
+                            No. IMB (Gabungan)
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.no_imb || ""}
+                            onChange={(e) => setFormData((p) => ({ ...p, no_imb: e.target.value }))}
+                            disabled={isSaving}
+                            className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+                            placeholder="Masukkan nomor IMB gabungan..."
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">
+                            Nama Pemilik IMB
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.nama_pemilik_imb || ""}
+                            onChange={(e) => setFormData((p) => ({ ...p, nama_pemilik_imb: e.target.value }))}
+                            disabled={isSaving}
+                            className="w-full px-3.5 py-2 bg-white dark:bg-[#14261c] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+                            placeholder="Masukkan nama pemilik IMB..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Section 3: Dimensi & Perolehan */}
-                <div className="border-t border-gray-100 pt-5">
-                  <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">3. Dimensi & Perolehan</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Thn Perolehan</label>
-                      <input
-                        type="number"
-                        value={formData.tahun_perolehan}
-                        onChange={(e) => setFormData((p) => ({ ...p, tahun_perolehan: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Contoh: 2020"
-                      />
-                    </div>
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Luas Tanah (m²)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={formData.luas_tanah}
-                        onChange={(e) => setFormData((p) => ({ ...p, luas_tanah: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Contoh: 500"
-                      />
-                    </div>
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Luas Pagar (m²)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={formData.luas_pagar}
-                        onChange={(e) => setFormData((p) => ({ ...p, luas_pagar: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Contoh: 150"
-                      />
-                    </div>
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Luas Bangunan (m²)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={formData.luas_bangunan}
-                        onChange={(e) => setFormData((p) => ({ ...p, luas_bangunan: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Contoh: 250"
-                      />
-                    </div>
-                    <div className="col-span-2 md:col-span-4">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Keterangan</label>
-                      <textarea
-                        rows="2"
-                        value={formData.keterangan}
-                        onChange={(e) => setFormData((p) => ({ ...p, keterangan: e.target.value }))}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Catatan tambahan..."
-                      />
-                    </div>
+                {/* Section 3: Catatan & Keterangan */}
+                <div className="space-y-3 bg-white dark:bg-[#14261c] p-3.5 sm:p-4 rounded-xl border border-slate-200/80 dark:border-gray-700 shadow-xs">
+                  <h4 className="font-bold text-[11px] text-[#0d5c3a] dark:text-emerald-400 pb-1 uppercase tracking-wide flex items-center gap-1.5 border-b border-emerald-100 dark:border-white/10">
+                    <FileText className="w-3.5 h-3.5" /> 3. Catatan & Keterangan
+                  </h4>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-900 dark:text-white mb-1">Keterangan</label>
+                    <textarea
+                      rows="2"
+                      value={formData.keterangan}
+                      onChange={(e) => setFormData((p) => ({ ...p, keterangan: e.target.value }))}
+                      disabled={isSaving}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1a2e22] border border-gray-300 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none custom-scrollbar transition-all"
+                      placeholder="Catatan tambahan..."
+                    />
                   </div>
                 </div>
 
               </div>
-              <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+              <div className="px-6 py-4 bg-gray-50 dark:bg-[#03140d] border-t border-gray-100 dark:border-white/10 flex justify-end items-center gap-3 shrink-0 rounded-b-2xl sm:rounded-b-3xl">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSaving}
-                  className="px-5 py-2.5 text-gray-600 dark:text-[#a4b4a9] hover:bg-gray-100 dark:hover:bg-[#243e2e] dark:hover:text-white rounded-xl font-medium text-sm transition-colors"
+                  className="px-5 py-2.5 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200/70 dark:hover:bg-[#1a2e22] transition-all border border-gray-200 dark:border-gray-600 bg-white dark:bg-[#14261c] cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm"
+                  className="px-6 py-2.5 rounded-full text-xs font-bold text-white bg-[#0d5c3a] hover:bg-[#156e49] shadow-md shadow-[#0d5c3a]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Simpan Lahan
+                  {isSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  {editingId ? "Simpan Perubahan" : "Simpan Data"}
                 </button>
               </div>
             </form>
@@ -1231,7 +1803,18 @@ export default function DaftarTanah({ userRole, lands = [], landFilter = "", set
         show={notif.show}
         message={notif.message}
         type={notif.type}
-        onClose={() => setNotif({ show: false, message: "", type: "" })}
+        onClose={() => {
+          setNotif({ show: false, message: "", type: "", onOk: null });
+          if (notif.onOk) notif.onOk();
+        }}
+      />
+      {/* Detail & History Modal */}
+      <DetailHistoryModal
+        isOpen={!!detailItem}
+        onClose={() => setDetailItem(null)}
+        item={detailItem}
+        type="tanah"
+        onEditItem={openEdit}
       />
     </>
   );

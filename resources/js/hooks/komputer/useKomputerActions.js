@@ -1,42 +1,33 @@
 // src/hooks/komputer/useKomputerActions.js
 import { useRef } from "react";
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { router } from "@inertiajs/react";
 import { importKomputerCSV, downloadTemplate } from "../../services/komputerService";
+import { parseExcelFile } from "../../utils/excelHelper";
 
 const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
 
 export function useKomputerActions({ filteredData, setIsSaving, showNotif }) {
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        try {
-          const total = await importKomputerCSV(APP_ID, data);
-          showNotif(`Sukses! ${total} data komputer berhasil di-import.`, "success", () => {
-            window.location.reload(); // Re-fetch the page on confirmation (or router.reload)
-          });
-        } catch (err) {
-          console.error(err);
-          const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan kolom header persis seperti template.";
-          showNotif(errorMsg, "error");
-        } finally {
-          setIsSaving(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-      },
-      error: (err) => {
-        console.error(err);
-        showNotif("Gagal membaca file CSV.", "error");
-        setIsSaving(false);
-      },
-    });
+    try {
+      const data = await parseExcelFile(file);
+      const total = await importKomputerCSV(APP_ID, data);
+      showNotif(`Sukses! ${total} data komputer berhasil di-import.`, "success", () => {
+        router.reload({ only: ['computers', 'activityLogs', 'outlets'] });
+      });
+    } catch (err) {
+      console.error(err);
+      const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan file Excel valid dan kolom header sesuai template.";
+      showNotif(errorMsg, "error");
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const exportToExcel = () => {

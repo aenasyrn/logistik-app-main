@@ -5,7 +5,7 @@ import { emptyFormPrinter as emptyForm } from "../../utils/deviceUtils";
 
 const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
 
-export function usePrinterCRUD({ printerData, setPrinterData, showNotif, outletsList, inventoryList }) {
+export function usePrinterCRUD({ printerData, setPrinterData, showNotif, setCurrentPage, resetFilters }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
   const [formData, setFormData]       = useState(emptyForm);
@@ -16,49 +16,102 @@ export function usePrinterCRUD({ printerData, setPrinterData, showNotif, outlets
   const openModalForAdd  = () => { resetForm(); setIsModalOpen(true); };
   const openModalForEdit = (printer) => {
     setEditingId(printer.id);
-    setFormData({ ...printer });
+    const idOutlet = printer.idOutlet ?? printer.outlet_id ?? "";
+    const tanggalMulai = printer.tanggalMulai ?? printer.tanggal_mulai ?? "";
+    const tanggalSelesai = printer.tanggalSelesai ?? printer.tanggal_selesai ?? "";
+    const vendor = printer.vendor ?? printer.penyedia ?? "";
+
+    setFormData({
+      idOutlet,
+      outlet: printer.outlet ?? "",
+      inventory_id: printer.inventory_id ?? printer.inventory?.id ?? null,
+      produk: printer.produk ?? "",
+      sn: printer.sn ?? "",
+      tanggalMulai,
+      tanggalSelesai,
+      vendor,
+      status: printer.status ?? "Inventaris",
+      kondisi: printer.kondisi ?? "BAIK",
+      keterangan: printer.keterangan ?? printer.deskripsi ?? "",
+      mode_edit: "koreksi",
+    });
     setIsModalOpen(true);
   };
 
   const handleSave = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
 
-    const isOutletValid = outletsList.some((o) => o.nama === formData.outlet);
-    const isProdukValid = inventoryList.some((i) => i.nama === formData.produk);
-    if (!isOutletValid) return showNotif("Nama Outlet tidak ditemukan di Master Data.", "error");
-    if (!isProdukValid) return showNotif("Produk Hardware tidak ditemukan di Master Data.", "error");
+    if (!formData.outlet?.trim()) {
+      showNotif("Nama Outlet harus diisi.", "error");
+      return;
+    }
 
     setIsSaving(true);
     try {
+      const resolvedOutletId = (formData.idOutlet && !isNaN(Number(formData.idOutlet)))
+        ? Number(formData.idOutlet)
+        : null;
+
+      const payload = {
+        ...formData,
+        idOutlet: resolvedOutletId,
+        outlet_id: resolvedOutletId,
+        inventory_id: formData.inventory_id ? Number(formData.inventory_id) : null,
+        tanggalMulai: formData.tanggalMulai?.trim() || null,
+        tanggalSelesai: formData.tanggalSelesai?.trim() || null,
+        tanggal_mulai: formData.tanggalMulai?.trim() || null,
+        tanggal_selesai: formData.tanggalSelesai?.trim() || null,
+        vendor: formData.vendor?.trim() || formData.penyedia?.trim() || null,
+      };
+
       if (editingId) {
-        await updatePrinter(APP_ID, editingId, formData);
+        const updatedItem = await updatePrinter(APP_ID, editingId, payload);
+        const mergedItem = { ...formData, ...updatedItem, id: editingId };
         setPrinterData((prev) =>
-          prev.map((item) => (item.id === editingId ? { id: editingId, ...formData } : item))
+          prev.map((item) => (item.id === editingId ? mergedItem : item))
         );
         showNotif("Perubahan data printer berhasil disimpan!");
       } else {
-        const newItem = await addPrinter(APP_ID, formData);
-        setPrinterData((prev) => [newItem, ...prev]);
+        const newItem = await addPrinter(APP_ID, payload);
+        const mergedItem = { ...formData, ...newItem };
+        setPrinterData((prev) => [mergedItem, ...prev]);
+        if (setCurrentPage) setCurrentPage(1);
+        if (resetFilters) resetFilters();
         showNotif("Data Printer baru berhasil ditambahkan!");
       }
       setIsModalOpen(false);
       resetForm();
     } catch (err) {
-      console.error(err);
-      showNotif("Gagal menyimpan data ke server.", "error");
+      console.error("Save printer error:", err);
+      const errorMsg =
+        err.response?.data?.message ||
+        (err.response?.data?.errors
+          ? Object.values(err.response.data.errors).flat().join(", ")
+          : null) ||
+        err.message ||
+        "Gagal menyimpan data ke server.";
+      showNotif(errorMsg, "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
+    setIsSaving(true);
     try {
-      await deletePrinter(APP_ID, id);
       setPrinterData((prev) => prev.filter((p) => p.id !== id));
-      showNotif("Data printer berhasil dihapus.");
+      const res = await deletePrinter(APP_ID, id);
+      showNotif(res?.message || "Data printer berhasil dihapus.");
     } catch (err) {
       console.error(err);
-      showNotif("Gagal menghapus data.", "error");
+      if (err.response?.status === 404) {
+        showNotif("Data sudah tidak ada di server dan telah dihapus dari tampilan.");
+      } else {
+        const errorMsg = err.response?.data?.message || err.message || "Gagal menghapus data.";
+        showNotif(errorMsg, "error");
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -70,3 +123,4 @@ export function usePrinterCRUD({ printerData, setPrinterData, showNotif, outlets
     handleSave, handleDelete,
   };
 }
+

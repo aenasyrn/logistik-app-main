@@ -2,9 +2,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { FileText, Plus, Trash2, Printer, RefreshCw } from "lucide-react";
-import { router } from "@inertiajs/react";
+import { createPortal } from "react-dom";
+import { FileText, Plus, Trash2, Printer, RefreshCw, Settings } from "lucide-react";
+import { router, usePage } from "@inertiajs/react";
 import axios from "axios";
+import CustomSelectDropdown from "../../Form/CustomSelectDropdown";
+import LetterNumberSettingsModal from "../../Form/LetterNumberSettingsModal";
+import WeekendWarningModal from "../../Common/WeekendWarningModal";
 
 // Helper to convert month index to Roman numerals
 function getRomanMonth(monthIndex) {
@@ -41,6 +45,13 @@ function formatDateOnly(dateStr) {
   const monthName = months[date.getMonth()];
   const year = date.getFullYear();
   return `${days} ${monthName} ${year}`;
+}
+
+// Extract percentage number from pajak text (e.g. "Harga yang tertera sudah termasuk Pajak-pajak 11%" -> "11")
+function extractPajakPersen(text) {
+  if (!text) return "";
+  const match = text.match(/(\d+(?:\.\d+)?)\s*%/);
+  return match ? match[1] : "";
 }
 
 // Helper to format string numbers with dots (thousands separator)
@@ -95,6 +106,17 @@ function convertToTerbilang(angka) {
 function capitalizeFirstLetter(str) {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatJenisElektronikText(jenisElektronikString) {
+  if (!jenisElektronikString) return "";
+  const items = jenisElektronikString.split(", ").map(i => i.trim()).filter(Boolean);
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} dan ${items[1]}`;
+
+  const lastItem = items.pop();
+  return `${items.join(", ")}, dan ${lastItem}`;
 }
 
 // Auto-growing textarea for editable document preview fields (completely hides scrollbars)
@@ -161,12 +183,47 @@ function FormTextarea({ value, onChange, placeholder, className = "", rows = 2, 
 }
 
 export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
+  const previewScrollContainerRef = useRef(null);
+  const previewScrollTopRef = useRef(0);
+
+  // Restore scroll position when this tab becomes active
+  useEffect(() => {
+    const isActive = activeTab === `spk_${type}`;
+    if (isActive && previewScrollContainerRef.current) {
+      const timer = setTimeout(() => {
+        if (previewScrollContainerRef.current) {
+          previewScrollContainerRef.current.scrollTop = previewScrollTopRef.current;
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, type]);
+
   // Get current Roman month and year
   const currentYear = new Date().getFullYear();
   const currentMonthTwoDigits = String(new Date().getMonth() + 1).padStart(2, "0");
 
   // Zoom control level for desktop screen view
-  const [zoomLevel, setZoomLevel] = useState(0.7);
+  const [zoomLevel, setZoomLevel] = useState(0.8);
+
+  // Reset zoom level to 80% when returning to this tab or clicking this feature again
+  useEffect(() => {
+    const myTabId = `spk_${type}`;
+    if (activeTab === myTabId) {
+      setZoomLevel(0.8);
+    }
+  }, [activeTab, type]);
+
+  useEffect(() => {
+    const myTabId = `spk_${type}`;
+    const handleViewSelected = (e) => {
+      if (e.detail?.viewId === myTabId) {
+        setZoomLevel(0.8);
+      }
+    };
+    window.addEventListener("app-view-selected", handleViewSelected);
+    return () => window.removeEventListener("app-view-selected", handleViewSelected);
+  }, [type]);
 
   // Synchronize zoom to 1.0 when browser print triggers
   useEffect(() => {
@@ -192,6 +249,15 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   }, [zoomLevel, type]);
 
   const resetForm = () => {
+    setActiveFormTab("header");
+    setZoomLevel(0.8);
+    if (formScrollContainerRef.current) {
+      formScrollContainerRef.current.scrollTop = 0;
+    }
+    previewScrollTopRef.current = 0;
+    if (previewScrollContainerRef.current) {
+      previewScrollContainerRef.current.scrollTop = 0;
+    }
     setLoadedId(null);
     setFormData({
       noSuratPrefix: "",
@@ -249,7 +315,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       syarat1cText: "",
       syarat1dText: "",
       syarat2ElektronikText: "",
-      syarat1aKendaraanText: "Harga yang tertera sudah termasuk Pajak-pajak 11%",
+      syarat1aKendaraanText: "",
       syarat1bKendaraanText: "",
       syarat2KendaraanText: "",
       syarat3KendaraanText: "",
@@ -257,6 +323,10 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       syarat5IntroKendaraanText: "Pembayaran dilakukan di Kas Kantor Wilayah VIII PT Pegadaian Jakarta dengan dilampiri :",
       syarat6KendaraanText: "Persyaratan Khusus :\nsyarat-syarat lain yang belum diatur didalam SPK ini akan diatur kemudian didalam perjanjian Kerja.",
       tanggalPersetujuanRaw: new Date().toISOString().split("T")[0],
+      tanggalBerlakuMulai: "",
+      tanggalBerlakuSampai: "",
+      isTermasukPajak: type === "elektronik" ? false : true,
+      pajakStatusText: type === "elektronik" ? "" : "(Sudah Termasuk Pajak)",
     });
     setProjectUraian("");
     setProjectJumlah("");
@@ -288,6 +358,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     setCustomTerbilang("");
     setIsCustomTerbilang(false);
     setErrors({});
+    fetchNextSpkNumber();
   };
 
   const mergeSyarat4Items = (loadedItems) => {
@@ -308,9 +379,57 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     });
   };
 
-  // Load selected SPK from history if set or when the tab becomes active
+  const applySpkData = (spk) => {
+    if (!spk) return;
+    previewScrollTopRef.current = 0;
+    if (previewScrollContainerRef.current) {
+      previewScrollContainerRef.current.scrollTop = 0;
+    }
+    if (formScrollContainerRef.current) {
+      formScrollContainerRef.current.scrollTop = 0;
+    }
+
+    if (spk.id || spk.loadedId) setLoadedId(spk.id || spk.loadedId);
+
+    const fd = spk.formData || (typeof spk.content === "object" && spk.content?.formData) || null;
+    if (fd) {
+      setFormData(prev => ({ ...prev, ...fd }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        noSurat: spk.nomor_spk || spk.nomorSpk || prev.noSurat,
+        kepadanya: spk.perusahaan || prev.kepadanya,
+        tanggalSuratRaw: spk.tanggal || prev.tanggalSuratRaw,
+        spkTotal: spk.jumlah || prev.spkTotal,
+      }));
+    }
+
+    const uraian = spk.projectUraian || spk.uraian || (typeof spk.content === "object" && spk.content?.projectUraian) || "";
+    if (uraian) setProjectUraian(uraian);
+
+    const jml = spk.projectJumlah || spk.jumlah || (typeof spk.content === "object" && spk.content?.projectJumlah) || "";
+    if (jml) setProjectJumlah(jml);
+
+    if (spk.syarat4Items) setSyarat4Items(mergeSyarat4Items(spk.syarat4Items));
+    if (spk.syarat6Items) setSyarat6Items(spk.syarat6Items);
+    if (spk.itemsList && Array.isArray(spk.itemsList)) setItemsList(spk.itemsList);
+    if (spk.customTerbilang) setCustomTerbilang(spk.customTerbilang);
+    if (spk.isCustomTerbilang !== undefined) setIsCustomTerbilang(spk.isCustomTerbilang);
+  };
+
+  // Track activeTab changes to reset form whenever leaving or entering without history edit
+  const prevActiveTabRef = useRef(activeTab);
   useEffect(() => {
-    if (activeTab !== `spk_${type}`) return;
+    const isCurrentActive = activeTab === `spk_${type}`;
+    const wasActive = prevActiveTabRef.current === `spk_${type}`;
+    prevActiveTabRef.current = activeTab;
+
+    if (!isCurrentActive) {
+      if (wasActive) {
+        resetForm();
+      }
+      return;
+    }
 
     try {
       const dataStr = localStorage.getItem("selected_spk_to_edit");
@@ -318,44 +437,35 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         if (dataStr === "NEW") {
           resetForm();
           localStorage.removeItem("selected_spk_to_edit");
-          return;
+        } else {
+          const spk = JSON.parse(dataStr);
+          applySpkData(spk);
+          localStorage.removeItem("selected_spk_to_edit");
+
+          // Check if print flag is active
+          const shouldPrint = localStorage.getItem("selected_spk_to_print");
+          if (shouldPrint) {
+            localStorage.removeItem("selected_spk_to_print");
+
+            const styleEl = document.createElement("style");
+            styleEl.id = "spk-print-page-style";
+            styleEl.innerHTML = `@page { size: A4 !important; margin: 0 !important; }`;
+            document.head.appendChild(styleEl);
+
+            document.body.classList.add(`print-spk-${type}-only`);
+            setTimeout(() => {
+              window.print();
+              document.body.classList.remove(`print-spk-${type}-only`);
+              const el = document.getElementById("spk-print-page-style");
+              if (el) el.remove();
+            }, 350);
+          }
         }
-        const spk = JSON.parse(dataStr);
-        if (spk.id) setLoadedId(spk.id);
-        if (spk.formData) setFormData(spk.formData);
-        if (spk.projectUraian) setProjectUraian(spk.projectUraian);
-        if (spk.projectJumlah) setProjectJumlah(spk.projectJumlah);
-        if (spk.syarat4Items) setSyarat4Items(mergeSyarat4Items(spk.syarat4Items));
-        if (spk.syarat6Items) setSyarat6Items(spk.syarat6Items);
-        if (spk.customTerbilang) setCustomTerbilang(spk.customTerbilang);
-        if (spk.isCustomTerbilang !== undefined) setIsCustomTerbilang(spk.isCustomTerbilang);
-
-        // Check if print flag is active
-        const shouldPrint = localStorage.getItem("selected_spk_to_print");
-        if (shouldPrint) {
-          localStorage.removeItem("selected_spk_to_print");
-
-          const styleEl = document.createElement("style");
-          styleEl.id = "spk-print-page-style";
-          styleEl.innerHTML = `@page { size: A4 !important; margin: 0 !important; }`;
-          document.head.appendChild(styleEl);
-
-          document.body.classList.add(`print-spk-${type}-only`);
-          setTimeout(() => {
-            window.print();
-            document.body.classList.remove(`print-spk-${type}-only`);
-            const el = document.getElementById("spk-print-page-style");
-            if (el) el.remove();
-          }, 350);
-        }
-
-        // Clean up
-        localStorage.removeItem("selected_spk_to_edit");
       }
     } catch (e) {
       console.error("Failed to load selected SPK for editing:", e);
     }
-  }, [activeTab]);
+  }, [activeTab, type]);
 
   // Listen to load document events for instant SPK edits/resets
   useEffect(() => {
@@ -368,16 +478,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       } else {
         const spkType = data.tipe_spk || data.tipeSpk || data.type || "renovasi";
         if (spkType !== type) return;
-
-        if (data.id) setLoadedId(data.id);
-        if (data.formData) setFormData(data.formData);
-        if (data.projectUraian) setProjectUraian(data.projectUraian);
-        if (data.projectJumlah) setProjectJumlah(data.projectJumlah);
-        if (data.syarat4Items) setSyarat4Items(mergeSyarat4Items(data.syarat4Items));
-        if (data.syarat6Items) setSyarat6Items(data.syarat6Items);
-        if (data.itemsList && Array.isArray(data.itemsList)) setItemsList(data.itemsList);
-        if (data.customTerbilang) setCustomTerbilang(data.customTerbilang);
-        if (data.isCustomTerbilang !== undefined) setIsCustomTerbilang(data.isCustomTerbilang);
+        applySpkData(data);
       }
     };
 
@@ -425,10 +526,46 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     };
   }, [type]);
 
+  const { auth } = usePage().props;
+  const isAdmin = auth?.user?.role === "admin";
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
   const [loadedId, setLoadedId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [showValidationModal, setShowValidationModal] = useState(false);
+  const [showWeekendModal, setShowWeekendModal] = useState(false);
+  const [weekendModalMessage, setWeekendModalMessage] = useState("");
+  const [letterNumberMode, setLetterNumberMode] = useState("otomatis");
+  const isManualMode = letterNumberMode === "manual";
+
+  // Auto-fetch next SPK letter number
+  const fetchNextSpkNumber = async () => {
+    try {
+      const res = await axios.get("/api/letter-numbers/next", {
+        params: { letter_type: "spk" }
+      });
+      if (res.data?.mode) {
+        setLetterNumberMode(res.data.mode);
+      }
+      if (res.data?.success && (res.data.next_number || res.data.number)) {
+        const num = res.data.next_number || res.data.number;
+        setFormData(prev => ({
+          ...prev,
+          noSuratPrefix: String(num),
+          noSurat: `${num}/00108.${currentMonthTwoDigits}/${currentYear}`
+        }));
+      }
+    } catch (err) {
+      console.error("Gagal mengambil nomor surat SPK berikutnya:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!loadedId && !formData.noSuratPrefix) {
+      fetchNextSpkNumber();
+    }
+  }, [loadedId]);
 
   // Main form state
   const [formData, setFormData] = useState({
@@ -499,7 +636,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     syarat1cText: "",
     syarat1dText: "",
     syarat2ElektronikText: "",
-    syarat1aKendaraanText: "Harga yang tertera sudah termasuk Pajak-pajak 11%",
+    syarat1aKendaraanText: "",
     syarat1bKendaraanText: "",
     syarat2KendaraanText: "",
     syarat3KendaraanText: "",
@@ -507,6 +644,10 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     syarat5IntroKendaraanText: "Pembayaran dilakukan di Kas Kantor Wilayah VIII PT Pegadaian Jakarta dengan dilampiri :",
     syarat6KendaraanText: "Persyaratan Khusus :\nsyarat-syarat lain yang belum diatur didalam SPK ini akan diatur kemudian didalam perjanjian Kerja.",
     tanggalPersetujuanRaw: new Date().toISOString().split("T")[0],
+    tanggalBerlakuMulai: "",
+    tanggalBerlakuSampai: "",
+    isTermasukPajak: type === "elektronik" ? false : true,
+    pajakStatusText: type === "elektronik" ? "" : "(Sudah Termasuk Pajak)",
   });
 
   // Project item details state
@@ -557,19 +698,25 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         let val = value;
         if (field === "hargaUnit" || field === "totalBulan") {
           val = formatNumberWithDots(value);
+        } else if (typeof value === "string") {
+          val = value.charAt(0).toUpperCase() + value.slice(1);
         }
 
         const updated = { ...item, [field]: val };
 
-        if (field === "hargaUnit" || field === "qty") {
-          const cleanUnit = (field === "hargaUnit" ? val : (updated.hargaUnit || "")).replace(/[^0-9]/g, "");
-          const unitNum = parseInt(cleanUnit, 10);
-          const cleanQty = (updated.qty || "").replace(/[^0-9]/g, "");
-          const qtyNum = parseInt(cleanQty, 10);
+        // Auto-calculate totalBulan for type === "kendaraan"
+        if (type === "kendaraan" && (field === "qty" || field === "hargaUnit")) {
+          const qtyStr = field === "qty" ? value : item.qty;
+          const hargaUnitStr = field === "hargaUnit" ? value : item.hargaUnit;
 
-          if (!isNaN(unitNum) && !isNaN(qtyNum) && qtyNum > 0) {
-            updated.totalBulan = formatNumberWithDots(unitNum * qtyNum);
-          }
+          const qtyMatch = (qtyStr || "").toString().match(/\d+/);
+          const qtyNum = qtyMatch ? parseInt(qtyMatch[0], 10) : 1;
+
+          const cleanHarga = (hargaUnitStr || "").toString().replace(/[^0-9]/g, "");
+          const hargaUnitNum = parseInt(cleanHarga, 10) || 0;
+
+          const totalBulan = qtyNum * hargaUnitNum;
+          updated.totalBulan = formatNumberWithDots(totalBulan);
         }
 
         return updated;
@@ -579,7 +726,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         if (field === "uraian") setProjectUraian(next[0].uraian);
         if (field === "qty") setProjectJumlah(next[0].qty);
         if (field === "hargaUnit") handleInlineEdit("hargaSewaPerUnit", next[0].hargaUnit);
-        if (field === "totalBulan") handleInlineEdit("spkJumlah", next[0].totalBulan);
+
+        if (type === "kendaraan" && (field === "qty" || field === "hargaUnit")) {
+          handleInlineEdit("spkJumlah", next[0].totalBulan);
+        } else if (field === "totalBulan") {
+          handleInlineEdit("spkJumlah", next[0].totalBulan);
+        }
       }
 
       recalculateTableTotals(next);
@@ -633,6 +785,25 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
   // Active Editor Section Tab
   const [activeFormTab, setActiveFormTab] = useState("header");
+  const formScrollContainerRef = useRef(null);
+
+  const changeTabAndScrollTop = (tabId) => {
+    setActiveFormTab(tabId);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    if (formScrollContainerRef.current) {
+      formScrollContainerRef.current.scrollTop = 0;
+    }
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      if (formScrollContainerRef.current) {
+        formScrollContainerRef.current.scrollTop = 0;
+      }
+    }, 10);
+  };
 
   // Determine active total for Terbilang
   const activeTotalSum = formData.spkDibulatkan || formData.spkTotal || "";
@@ -666,6 +837,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       name === "hargaSewaPerUnit"
     ) {
       updatedValue = formatNumberWithDots(value);
+    } else if (e.target.type === "text" || e.target.tagName === "TEXTAREA" || e.target.type === "textarea") {
+      updatedValue = value.charAt(0).toUpperCase() + value.slice(1);
     }
 
     setFormData((prev) => {
@@ -773,6 +946,65 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     });
   };
 
+  const handleTanggalBerlakuChange = (name, val) => {
+    if (errors.spkBulan) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next.spkBulan;
+        return next;
+      });
+    }
+
+    setFormData((prev) => {
+      const next = { ...prev, [name]: val };
+
+      const tglMulai = name === "tanggalBerlakuMulai" ? val : prev.tanggalBerlakuMulai;
+      const tglSampai = name === "tanggalBerlakuSampai" ? val : prev.tanggalBerlakuSampai;
+
+      if (tglMulai && tglSampai) {
+        const start = new Date(tglMulai);
+        const end = new Date(tglSampai);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          const adjustedEnd = new Date(end);
+          adjustedEnd.setDate(adjustedEnd.getDate() + 1);
+
+          let months = (adjustedEnd.getFullYear() - start.getFullYear()) * 12 + (adjustedEnd.getMonth() - start.getMonth());
+          if (adjustedEnd.getDate() < start.getDate()) {
+            months--;
+          }
+          if (months < 0) months = 0;
+
+          next.spkBulan = months.toString();
+
+          const formattedMulai = formatDateOnly(tglMulai);
+          const formattedSampai = formatDateOnly(tglSampai);
+          next.syarat1bKendaraanText = `Jangka waktu berlakunya sewa menyewa adalah selama ${months} bulan. Berlaku dari ${formattedMulai} sampai dengan ${formattedSampai}.`;
+
+          // Recalculate summary totals
+          const monthlyRent = parseInt((next.spkJumlah || "").replace(/[^0-9]/g, ""), 10) || 0;
+          if (monthlyRent > 0 && months > 0) {
+            const total = monthlyRent * months;
+            next.spkTotal = formatNumberWithDots(total);
+            next.spkDibulatkan = formatNumberWithDots(total);
+          } else {
+            next.spkTotal = "";
+            next.spkDibulatkan = "";
+          }
+
+          // Recalculate table totals
+          setTimeout(() => {
+            recalculateTableTotals(itemsList, months.toString());
+          }, 0);
+        }
+      } else {
+        const formattedMulai = tglMulai ? formatDateOnly(tglMulai) : "...";
+        const formattedSampai = tglSampai ? formatDateOnly(tglSampai) : "...";
+        next.syarat1bKendaraanText = `Jangka waktu berlakunya sewa menyewa adalah selama ... bulan. Berlaku dari ${formattedMulai} sampai dengan ${formattedSampai}.`;
+      }
+      return next;
+    });
+  };
+
   // Sync Syarat 1 sentence when value changes in form
   const handleSyarat1HariChange = (val) => {
     // Clear field error
@@ -846,6 +1078,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       name === "hargaSewaPerUnit"
     ) {
       updatedValue = formatNumberWithDots(value);
+    } else if (typeof value === "string") {
+      updatedValue = value.charAt(0).toUpperCase() + value.slice(1);
     }
 
     setFormData((prev) => {
@@ -855,6 +1089,24 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   };
 
   const saveToHistory = (silent = false, onSuccessCallback = null) => {
+    // Pengecekan Hari Kerja (Senin - Jumat) untuk SPK
+    if (formData.tanggalSuratRaw) {
+      const parts = String(formData.tanggalSuratRaw).split("T")[0].split("-");
+      let day = -1;
+      if (parts.length === 3) {
+        day = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getDay();
+      } else {
+        day = new Date(formData.tanggalSuratRaw).getDay();
+      }
+      if (day === 0 || day === 6) {
+        const hariNama = day === 6 ? "Sabtu" : "Minggu";
+        setWeekendModalMessage(`Hari ${hariNama} tidak dapat digunakan. Surat Perintah Kerja (SPK) tidak dapat disubmit pada hari Sabtu dan Minggu (hanya Senin s.d. Jumat).`);
+        setShowWeekendModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     const startTime = Date.now();
     try {
@@ -879,17 +1131,10 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       };
 
       axios.post('/spk-histories', newEntry)
-        .then(async (res) => {
+        .then((res) => {
           if (res.data && res.data.id) {
             setLoadedId(res.data.id);
             window.dispatchEvent(new CustomEvent("spk-saved-to-db", { detail: res.data.id }));
-          }
-
-          // Enforce a minimum 6-second delay when submitting (has success callback)
-          if (onSuccessCallback) {
-            const elapsedTime = Date.now() - startTime;
-            const remainingTime = Math.max(0, 6000 - elapsedTime);
-            await new Promise((resolve) => setTimeout(resolve, remainingTime));
           }
 
           setIsSubmitting(false);
@@ -903,8 +1148,9 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         .catch((err) => {
           setIsSubmitting(false);
           console.error("Failed to save SPK to DB:", err);
+          const errorMsg = err.response?.data?.message || "Gagal menyimpan dokumen SPK ke riwayat.";
           if (!silent) {
-            alert("Gagal menyimpan dokumen SPK ke riwayat.");
+            alert(errorMsg);
           }
         });
     } catch (e) {
@@ -917,6 +1163,28 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   };
 
   const handleSubmitHistory = () => {
+    // Pengecekan Hari Kerja (Senin - Jumat) untuk SPK
+    if (formData.tanggalSuratRaw) {
+      const parts = String(formData.tanggalSuratRaw).split("T")[0].split("-");
+      let day = -1;
+      if (parts.length === 3) {
+        day = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getDay();
+      } else {
+        day = new Date(formData.tanggalSuratRaw).getDay();
+      }
+      if (day === 0 || day === 6) {
+        const hariNama = day === 6 ? "Sabtu" : "Minggu";
+        setWeekendModalMessage(`Hari ${hariNama} tidak dapat digunakan. Surat Perintah Kerja (SPK) tidak dapat disubmit pada hari Sabtu dan Minggu (hanya Senin s.d. Jumat).`);
+        setShowWeekendModal(true);
+        setActiveFormTab("header");
+        setErrors((prev) => ({
+          ...prev,
+          tanggalSuratRaw: `Hari ${hariNama} tidak diperbolehkan (hanya Senin s.d. Jumat).`,
+        }));
+        return;
+      }
+    }
+
     const newErrors = {};
 
     // Validate formData keys
@@ -1336,11 +1604,11 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           <table className="w-full border-collapse border border-black text-[10pt] text-left table-fixed">
             <thead>
               <tr className="border-b border-black bg-gray-50/50">
-                <th className="border-r border-black p-1 text-center w-[6%] font-normal">No</th>
-                <th className="border-r border-black p-1 text-center w-[40%] font-normal font-sans">Uraian Pekerjaan</th>
-                <th className="border-r border-black p-1 text-center w-[12%] font-normal font-sans">QTY.</th>
-                <th className="border-r border-black p-1 text-center w-[18%] font-normal font-sans">{col4Title}</th>
-                <th className="p-1 text-center w-[24%] font-normal font-sans">{col5Title}</th>
+                <th className="border-r border-black p-1 text-center w-[6%] font-bold">No</th>
+                <th className="border-r border-black p-1 text-center w-[40%] font-bold font-sans">Uraian Pekerjaan</th>
+                <th className="border-r border-black p-1 text-center w-[12%] font-bold font-sans">QTY.</th>
+                <th className="border-r border-black p-1 text-center w-[18%] font-bold font-sans">{col4Title}</th>
+                <th className="p-1 text-center w-[24%] font-bold font-sans">{col5Title}</th>
               </tr>
             </thead>
             <tbody>
@@ -1392,28 +1660,40 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               ))}
 
               {/* Row 2: Total Harga Sewa Per Bulan */}
-              <tr className="border-b border-black font-bold">
-                <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans">
+              <tr className="border-b border-black font-normal">
+                <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans font-normal text-[10pt]">
                   {row2Title}
                 </td>
-                <td className="p-1 text-left font-mono">
+                <td className="p-1 text-left font-mono font-normal text-[10pt] align-middle">
                   Rp {formData.spkJumlah ? `${formData.spkJumlah},-` : "-"}
                 </td>
               </tr>
 
               {/* Row 3: Total Harga Sewa (36 Bulan) */}
-              <tr className="border-b border-black font-bold">
-                <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans">
-                  {row3Title}
+              <tr className="border-b border-black font-normal">
+                <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans font-normal text-[10pt]">
+                  <div>{row3Title}</div>
+                  {formData.isTermasukPajak && (
+                    <div className="text-[9pt] font-bold mt-0.5">
+                      <span
+                        contentEditable
+                        suppressContentEditableWarning
+                        onBlur={(e) => handleInlineEdit("pajakStatusText", e.target.innerText)}
+                        className="outline-none"
+                      >
+                        {formData.pajakStatusText || ""}
+                      </span>
+                    </div>
+                  )}
                 </td>
-                <td className="p-1 text-left font-mono">
+                <td className="p-1 text-left font-mono font-normal text-[10pt] align-middle">
                   Rp {formData.spkDibulatkan || formData.spkTotal ? `${formData.spkDibulatkan || formData.spkTotal},-` : "-"}
                 </td>
               </tr>
 
               {/* Terbilang block */}
               <tr>
-                <td colSpan={5} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-bold">
+                <td colSpan={5} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-normal">
                   “{isCustomTerbilang ? (
                     <span
                       contentEditable
@@ -1637,7 +1917,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                     onBlur={(e) => handleInlineEdit("syarat1aKendaraanText", e.target.innerText)}
                     className="outline-none block w-full hover:bg-gray-50 focus:bg-white p-0.5 rounded transition-colors"
                   >
-                    {formData.syarat1aKendaraanText || "Harga yang tertera sudah termasuk Pajak-pajak 11%"}
+                    {formData.syarat1aKendaraanText || "Harga yang tertera sudah termasuk Pajak-pajak ...%"}
                   </span>
                 </div>
               </div>
@@ -1651,7 +1931,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) => handleInlineEdit("syarat1bKendaraanText", e.target.innerText)}
-                    className={`border-b border-dashed border-gray-350 px-0.5 hover:border-emerald-600 focus:border-emerald-600 focus:bg-white outline-none ${!formData.syarat1bKendaraanText ? "text-gray-400 italic font-medium" : ""}`}
+                    className={`font-bold border-b border-dashed border-gray-350 px-0.5 hover:border-emerald-600 focus:border-emerald-600 focus:bg-white outline-none ${!formData.syarat1bKendaraanText ? "text-gray-400 italic" : ""}`}
                   >
                     {formData.syarat1bKendaraanText || "[Tuliskan jangka waktu sewa, contoh: selama 12 Bulan. Berlaku dari 23 Juli sampai dengan 22 Juli 2025]"}
                   </span>
@@ -1757,7 +2037,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               contentEditable
               suppressContentEditableWarning
               onBlur={(e) => handleInlineEdit("jenisElektronik", e.target.innerText)}
-              className={`font-bold border-b border-dashed border-gray-350 px-0.5 hover:border-emerald-600 focus:border-emerald-600 focus:bg-white outline-none ${!formData.jenisElektronik ? "text-gray-400 italic font-medium" : ""}`}
+              className={`font-bold border-b border-dashed border-gray-350 px-0.5 hover:border-emerald-600 focus:border-emerald-600 focus:bg-white outline-none ${!formData.jenisElektronik ? "text-gray-400 italic" : ""}`}
             >
               {formData.jenisElektronik || "[Tuliskan jenis kendaraan, contoh: Motor Honda Supra X125 PGM FI CW Tahun 2020]"}
             </span>{" "}
@@ -1797,7 +2077,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               onBlur={(e) => handleInlineEdit("jenisElektronik", e.target.innerText)}
               className={`font-bold border-b border-dashed border-gray-350 px-0.5 hover:border-emerald-600 focus:border-emerald-600 focus:bg-white outline-none ${!formData.jenisElektronik ? "text-gray-400 italic font-medium" : ""}`}
             >
-              {formData.jenisElektronik || "[Tuliskan jenis elektronik, contoh: Printer]"}
+              {formatJenisElektronikText(formData.jenisElektronik) || "[Tuliskan jenis elektronik, contoh: Printer]"}
             </span>
             , ketentuan jumlah biaya/harga dapat berubah menyesuaikan dengan jumlah awal.
           </div>
@@ -2225,13 +2505,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           <table className="w-full border-collapse border border-black text-[10pt] text-left table-fixed">
             <thead>
               <tr className="border-b border-black bg-gray-50/50">
-                <th className="border-r border-black p-1 text-center w-[6%] font-normal">No</th>
-                <th className="border-r border-black p-1 text-center w-[40%] font-normal font-sans">Uraian Pekerjaan</th>
-                <th className="border-r border-black p-1 text-center w-[12%] font-normal font-sans">QTY.</th>
-                <th className="border-r border-black p-1 text-center w-[18%] font-normal font-sans">
+                <th className="border-r border-black p-1 text-center w-[6%] font-bold">No</th>
+                <th className="border-r border-black p-1 text-center w-[40%] font-bold font-sans">Uraian Pekerjaan</th>
+                <th className="border-r border-black p-1 text-center w-[12%] font-bold font-sans">QTY.</th>
+                <th className="border-r border-black p-1 text-center w-[18%] font-bold font-sans">
                   {type === "kendaraan" ? "Harga Sewa per Unit/Bln" : "Harga Sewa per Unit"}
                 </th>
-                <th className="p-1 text-center w-[24%] font-normal font-sans">
+                <th className="p-1 text-center w-[24%] font-bold font-sans">
                   {type === "kendaraan" ? "Jumlah" : "Jumlah Harga Sewa Perbulan"}
                 </th>
               </tr>
@@ -2328,24 +2608,36 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           return (
             <table className="w-full border-collapse border-l border-r border-b border-black text-[10pt] text-left table-fixed">
               <tbody>
-                <tr className="border-b border-black font-bold">
-                  <td className="border-r border-black p-1 text-right pr-4 font-sans w-[76%]">
+                <tr className="border-b border-black font-normal text-[10pt]">
+                  <td className="border-r border-black p-1 text-right pr-4 font-sans w-[76%] font-normal text-[10pt]">
                     {row2Title}
                   </td>
-                  <td className="p-1 text-left font-mono w-[24%]">
+                  <td className="p-1 text-left font-mono w-[24%] font-normal text-[10pt] align-middle">
                     {type === "kendaraan" ? "Rp. " : "Rp "}{formData.spkJumlah ? `${formData.spkJumlah},-` : "-"}
                   </td>
                 </tr>
-                <tr className="border-b border-black font-bold">
-                  <td className="border-r border-black p-1 text-right pr-4 font-sans w-[76%]">
-                    {row3Title}
+                <tr className="border-b border-black font-normal text-[10pt]">
+                  <td className="border-r border-black p-1 text-right pr-4 font-sans w-[76%] font-normal text-[10pt]">
+                    <div>{row3Title}</div>
+                    {formData.isTermasukPajak && (
+                      <div className="text-[9pt] font-bold mt-0.5">
+                        <span
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={(e) => handleInlineEdit("pajakStatusText", e.target.innerText)}
+                          className="outline-none"
+                        >
+                          {formData.pajakStatusText || ""}
+                        </span>
+                      </div>
+                    )}
                   </td>
-                  <td className="p-1 text-left font-mono w-[24%]">
+                  <td className="p-1 text-left font-mono w-[24%] font-normal text-[10pt] align-middle">
                     {type === "kendaraan" ? "Rp. " : "Rp "}{formData.spkDibulatkan || formData.spkTotal ? `${formData.spkDibulatkan || formData.spkTotal},-` : "-"}
                   </td>
                 </tr>
                 <tr>
-                  <td colSpan={2} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-bold">
+                  <td colSpan={2} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-normal text-[10pt]">
                     “{isCustomTerbilang ? (
                       <span
                         contentEditable
@@ -2487,12 +2779,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         block.id.startsWith("table-row-") ||
         block.id === "table-header" ||
         block.id === "table-renovasi" ||
-        block.id === "table-calculations" ||
-        block.id === "syarat-heading" ||
-        block.id === "syarat-1" ||
-        block.id === "syarat-2" ||
-        block.id === "syarat-3" ||
-        block.id.startsWith("syarat-4-part-1")
+        block.id === "table-calculations"
       ) {
         page1Ids.push(block.id);
       } else {
@@ -2503,36 +2790,38 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     return [page1Ids, page2Ids];
   };
 
-  React.useLayoutEffect(() => {
+  const calculatePageGroups = React.useCallback(() => {
     if (!measureContainerRef.current) return;
 
     const container = measureContainerRef.current;
     const children = Array.from(container.querySelectorAll("[data-block-id]"));
+    if (children.length === 0) return;
+
     const blockHeights = {};
+    let totalHeight = 0;
     children.forEach((child) => {
       const id = child.getAttribute("data-block-id");
-      blockHeights[id] = child.getBoundingClientRect().height;
+      const h = child.getBoundingClientRect().height;
+      blockHeights[id] = h;
+      totalHeight += h;
     });
 
+    // Jangan update jika kontainer belum dirender (tinggi total = 0 karena display: none)
+    if (totalHeight === 0) return;
 
-
-    // Hitung tinggi maksimal halaman secara presisi berdasarkan ukuran A4 nyata,
-    // bukan angka tebakan, supaya konten tidak overflow dan tanda tangan tidak terpotong.
-    const MM_TO_PX = 3.7795; // konversi mm ke px pada 96dpi
+    // Hitung tinggi maksimal halaman secara presisi berdasarkan ukuran A4 nyata (96dpi)
+    const MM_TO_PX = 3.7795;
     const PAPER_HEIGHT_MM = 297;
     const PADDING_TOP_MM = 5;
     const PADDING_BOTTOM_MM = 5;
-    const HEADER_MM = 14;
-    const FOOTER_MM = 16;
     const CONTENT_MARGIN_TOP_MM = 20;
     const CONTENT_MARGIN_BOTTOM_MM = 23;
-    const SAFETY_BUFFER_MM = 12; // buffer ekstra kustom agar aman
+    const SAFETY_BUFFER_MM = 10; // buffer ekstra agar konten tidak menyentuh footer
 
     const usableHeightMM =
       PAPER_HEIGHT_MM - PADDING_TOP_MM - PADDING_BOTTOM_MM - CONTENT_MARGIN_TOP_MM - CONTENT_MARGIN_BOTTOM_MM - SAFETY_BUFFER_MM;
     const maxPageHeight = usableHeightMM * MM_TO_PX;
 
-    // Tinggi blok tanda tangan diambil terpisah agar bisa dicek khusus
     const signatureHeight = blockHeights["signatures"] || 0;
 
     const newPageGroups = [];
@@ -2541,9 +2830,18 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
     const blocks = getDocumentBlocks();
 
-    blocks.forEach((block) => {
+    blocks.forEach((block, bIdx) => {
       let height = blockHeights[block.id] || 0;
       const isSignatureBlock = block.id === "signatures";
+      const isSyaratHeading = block.id === "syarat-heading";
+
+      // Jika blok adalah syarat-heading, periksa apakah blok berikutnya (syarat-1) juga muat di halaman ini.
+      // Jika syarat-1 tidak muat, jangan tinggalkan syarat-heading sendirian di ujung bawah halaman!
+      let extraLookaheadHeight = 0;
+      if (isSyaratHeading && bIdx + 1 < blocks.length) {
+        const nextBlock = blocks[bIdx + 1];
+        extraLookaheadHeight = blockHeights[nextBlock.id] || 0;
+      }
 
       if (currentPage.length === 0) {
         currentPage.push(block.id);
@@ -2552,7 +2850,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           const headerHeight = blockHeights["table-header"] || 0;
           currentPageHeight += headerHeight;
         }
-      } else if (currentPageHeight + height > maxPageHeight) {
+      } else if (currentPageHeight + height + (isSyaratHeading ? extraLookaheadHeight : 0) > maxPageHeight) {
         newPageGroups.push(currentPage);
         currentPage = [block.id];
         currentPageHeight = height;
@@ -2564,9 +2862,6 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         isSignatureBlock &&
         currentPageHeight + signatureHeight > maxPageHeight
       ) {
-        // Khusus tanda tangan: jika sisa ruang halaman ini tidak cukup
-        // untuk menampung SELURUH blok tanda tangan, pindahkan ke halaman baru
-        // agar tidak terpotong di tengah.
         newPageGroups.push(currentPage);
         currentPage = [block.id];
         currentPageHeight = height;
@@ -2596,6 +2891,18 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     pageGroups
   ]);
 
+  React.useLayoutEffect(() => {
+    calculatePageGroups();
+  }, [calculatePageGroups, activeTab]);
+
+  React.useEffect(() => {
+    // Jalankan kalkulasi saat tab aktif atau setelah DOM selesai dilayout
+    const timer = setTimeout(() => {
+      calculatePageGroups();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [activeTab, calculatePageGroups]);
+
   const activePageGroups = pageGroups || getDefaultPageGroups();
 
   const renderPageBlocks = (pageBlockIds) => {
@@ -2612,13 +2919,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           {renderHeader && (
             <thead>
               <tr className="border-b border-black bg-gray-50/50">
-                <th className="border-r border-black p-1 text-center w-[6%] font-normal">No</th>
-                <th className="border-r border-black p-1 text-center w-[40%] font-normal font-sans">Uraian Pekerjaan</th>
-                <th className="border-r border-black p-1 text-center w-[12%] font-normal font-sans">QTY.</th>
-                <th className="border-r border-black p-1 text-center w-[18%] font-normal font-sans">
+                <th className="border-r border-black p-1 text-center w-[6%] font-bold">No</th>
+                <th className="border-r border-black p-1 text-center w-[40%] font-bold font-sans">Uraian Pekerjaan</th>
+                <th className="border-r border-black p-1 text-center w-[12%] font-bold font-sans">QTY.</th>
+                <th className="border-r border-black p-1 text-center w-[18%] font-bold font-sans">
                   {type === "kendaraan" ? "Harga Sewa per Unit/Bln" : "Harga Sewa per Unit"}
                 </th>
-                <th className="p-1 text-center w-[24%] font-normal font-sans">
+                <th className="p-1 text-center w-[24%] font-bold font-sans">
                   {type === "kendaraan" ? "Jumlah" : "Jumlah Harga Sewa Perbulan"}
                 </th>
               </tr>
@@ -2695,24 +3002,36 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
               return (
                 <>
-                  <tr className="border-b border-black font-bold">
-                    <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans">
+                  <tr className="border-b border-black font-normal text-[10pt]">
+                    <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans font-normal text-[10pt]">
                       {row2Title}
                     </td>
-                    <td className="p-1 text-left font-mono">
+                    <td className="p-1 text-left font-mono font-normal text-[10pt] align-middle">
                       {type === "kendaraan" ? "Rp. " : "Rp "}{formData.spkJumlah ? `${formData.spkJumlah},-` : "-"}
                     </td>
                   </tr>
-                  <tr className="border-b border-black font-bold">
-                    <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans">
-                      {row3Title}
+                  <tr className="border-b border-black font-normal text-[10pt]">
+                    <td colSpan={4} className="border-r border-black p-1 text-right pr-4 font-sans font-normal text-[10pt]">
+                      <div>{row3Title}</div>
+                      {formData.isTermasukPajak && (
+                        <div className="text-[9pt] font-bold mt-0.5">
+                          <span
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => handleInlineEdit("pajakStatusText", e.target.innerText)}
+                            className="outline-none"
+                          >
+                            {formData.pajakStatusText || ""}
+                          </span>
+                        </div>
+                      )}
                     </td>
-                    <td className="p-1 text-left font-mono">
+                    <td className="p-1 text-left font-mono font-normal text-[10pt] align-middle">
                       Rp {formData.spkDibulatkan || formData.spkTotal ? `${formData.spkDibulatkan || formData.spkTotal},-` : "-"}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={5} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-bold">
+                    <td colSpan={5} className="p-1 italic leading-normal border-t border-black text-gray-800 text-center font-normal text-[10pt]">
                       “{isCustomTerbilang ? (
                         <span
                           contentEditable
@@ -2789,9 +3108,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         /* Global rules for SPK document preview that apply on screen */
         .spk-paper {
           width: 210mm;
-          height: 297mm;
+          max-width: 100%;
           min-height: 297mm;
-          max-height: 297mm;
           padding: 5mm 12mm 5mm 12mm;
           box-sizing: border-box;
           position: relative;
@@ -2802,7 +3120,6 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           font-size: 11pt;
           line-height: 1.4;
           color: #111;
-          overflow: hidden;
         }
         .spk-header {
           position: absolute;
@@ -2816,8 +3133,8 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           padding: 0;
         }
         .spk-content {
-          margin-top: 20mm;
-          margin-bottom: 23mm;
+          margin-top: 16mm;
+          margin-bottom: 18mm;
           flex: 1 1 0%;
           display: flex;
           flex-direction: column;
@@ -2844,6 +3161,14 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           border-bottom-color: #007c55ff;
           background-color: #ffffff;
           outline: none;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+          display: none !important;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none !important;  /* IE and Edge */
+          scrollbar-width: none !important;  /* Firefox */
         }
 
         @media print {
@@ -3023,16 +3348,16 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       `}</style>
 
       {/* LEFT PANE: Editor Panel */}
-      <div className="xl:col-span-5 bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col no-print shrink-0 overflow-hidden max-h-[85vh]">
+      <div className="xl:col-span-5 bg-white dark:bg-gradient-to-b dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md flex flex-col no-print shrink-0 overflow-hidden max-h-[calc(100vh-48px)] sticky top-6">
         {/* Panel Header */}
-        <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <FileText className="w-5 h-5" />
+        <div className="p-4 bg-[#ffffff] dark:bg-transparent flex justify-between items-center shrink-0 border-b border-gray-100 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[#066027] text-white rounded-xl shadow-2xs">
+              <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-gray-800 text-base leading-tight">Surat Perintah Kerja</h3>
-              <p className="text-xs text-gray-500">
+              <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">Surat Perintah Kerja</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                 {type === "elektronik"
                   ? "Editor Surat SPK Elektronik"
                   : type === "kendaraan"
@@ -3043,20 +3368,22 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
           </div>
         </div>
 
-        {/* Tab Headers */}
-        <div className="flex border-b border-gray-100 bg-gray-50/30 text-xs font-medium text-gray-500 overflow-x-auto">
+        {/* Tab Headers - Compact Flat Bar Design */}
+        <div className="flex bg-[#1c5f28] border-b border-[#14481e] p-0 overflow-x-auto no-scrollbar shrink-0">
           {[
             { id: "header", label: "Kop & Pihak" },
-            ...(type === "elektronik" ? [] : [{ id: "references", label: "Menunjuk" }]),
+            ...(type !== "elektronik" ? [{ id: "references", label: "Menunjuk" }] : []),
             { id: "items", label: "Uraian Kerja" },
             { id: "terms", label: "Syarat & TTD" }
-          ].map((tab) => (
+          ].map((tab, idx, arr) => (
             <button
               key={tab.id}
-              onClick={() => setActiveFormTab(tab.id)}
-              className={`flex-1 py-3 px-4 border-b-2 text-center whitespace-nowrap transition-colors ${activeFormTab === tab.id
-                ? "border-emerald-600 text-emerald-700 font-semibold bg-emerald-50/10"
-                : "border-transparent hover:text-gray-700 hover:bg-gray-50"
+              type="button"
+              onClick={() => changeTabAndScrollTop(tab.id)}
+              className={`flex-1 py-2 px-3 text-center whitespace-nowrap transition-colors cursor-pointer rounded-none text-xs md:text-sm font-semibold flex items-center justify-center ${idx < arr.length - 1 ? "border-r border-white/40" : ""
+                } ${activeFormTab === tab.id
+                  ? "bg-white text-[#1c5f28] font-extrabold"
+                  : "bg-transparent text-white hover:bg-white/10"
                 }`}
             >
               {tab.label}
@@ -3065,121 +3392,171 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         </div>
 
         {/* Tab Contents */}
-        <div className="p-6 flex-1 overflow-y-auto space-y-5">
+        <div ref={formScrollContainerRef} className="p-6 flex-1 overflow-y-auto space-y-5 custom-scrollbar">
           {activeFormTab === "header" && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Nomor Urut SPK (Running Number) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
-                </label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    name="noSuratPrefix"
-                    value={formData.noSuratPrefix}
-                    onChange={handleChange}
-                    onFocus={() => scrollToPreview("preview-header-intro")}
-                    placeholder="Contoh: 1506"
-                    className={`w-1/3 px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.noSuratPrefix ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
-                  />
-                  <span className="text-gray-400 font-mono text-sm">/00108.{currentMonthTwoDigits}/{currentYear}</span>
+              <h4 className="text-sm font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wide mb-3">KOP & TANGGAL SURAT</h4>
+
+              <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
+                {/* Banner Pengaturan Nomor Surat (Khusus Admin) - Di Bagian Paling Atas Card Kop Surat */}
+                {isAdmin && (
+                  <div className="mb-4 p-2 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/40 border border-emerald-200/90 dark:border-emerald-800/60 rounded-xl shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowSettingsModal(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-[#0d5c3a] hover:bg-[#094229] text-white rounded-lg text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Pengaturan Nomor Surat</span>
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white">
+                      Nomor Urut SPK (Running Number) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                    </label>
+                    {!isManualMode && (
+                      <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+                        🔒 Terkunci ({letterNumberMode === "reset_manual" ? "Reset Manual" : "Otomatis"})
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      name="noSuratPrefix"
+                      value={formData.noSuratPrefix}
+                      readOnly={!isManualMode}
+                      onChange={isManualMode ? handleChange : undefined}
+                      onFocus={() => scrollToPreview("preview-header-intro")}
+                      placeholder="Contoh: 1506"
+                      className={`w-1/3 px-4 py-2.5 border rounded-2xl outline-none text-sm font-mono font-bold transition-colors ${
+                        errors.noSuratPrefix
+                          ? "border-red-500 focus:border-red-500"
+                          : isManualMode
+                          ? "bg-white dark:bg-[#1a2e22] border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-gray-900 dark:text-white cursor-text"
+                          : "bg-gray-100 dark:bg-[#142219] border-gray-200 dark:border-[#223829] text-gray-600 dark:text-gray-400 cursor-not-allowed select-none"
+                      }`}
+                      title={!isManualMode ? `Nomor surat terisi otomatis (Mode ${letterNumberMode === "reset_manual" ? "Reset Manual" : "Otomatis"}). Ubah ke Mode Manual di Pengaturan Nomor Surat jika ingin mengubah nomor urut.` : ""}
+                    />
+                    <span className="text-gray-400 font-mono text-sm">/00108.{currentMonthTwoDigits}/{currentYear}</span>
+                  </div>
+                  {errors.noSuratPrefix && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.noSuratPrefix}</p>}
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {isManualMode
+                      ? "Ketik nomor urut surat, bulan berjalan dan tahun akan otomatis terbuat di preview."
+                      : `Nomor urut surat terisi otomatis sesuai pengaturan (Mode ${letterNumberMode === "reset_manual" ? "Reset Manual" : "Otomatis"}).`}
+                  </p>
                 </div>
-                {errors.noSuratPrefix && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.noSuratPrefix}</p>}
-                <p className="text-[10px] text-gray-400 mt-1">Ketik nomor urut surat, bulan berjalan dan tahun akan otomatis terbuat di preview.</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
+                      Tempat Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="tempatSurat"
+                      value={formData.tempatSurat}
+                      onChange={handleChange}
+                      onFocus={() => scrollToPreview("preview-tujuan")}
+                      placeholder="Contoh: Jakarta"
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-sm text-gray-900 dark:text-white ${errors.tempatSurat ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
+                    />
+                    {errors.tempatSurat && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tempatSurat}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
+                      Tanggal Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      name="tanggalSuratRaw"
+                      value={formData.tanggalSuratRaw}
+                      onChange={handleChange}
+                      onFocus={() => scrollToPreview("preview-tujuan")}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-sm text-gray-900 dark:text-white ${errors.tanggalSuratRaw ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
+                    />
+                    {errors.tanggalSuratRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tanggalSuratRaw}</p>}
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <h4 className="text-sm font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wide pt-2 mb-3">INFORMASI PENERIMA</h4>
+
+              <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Tempat Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                  <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
+                    Kepada Yth. (Nama Penerima/Perusahaan) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                   </label>
                   <input
                     type="text"
-                    name="tempatSurat"
-                    value={formData.tempatSurat}
+                    name="kepadanya"
+                    value={formData.kepadanya}
                     onChange={handleChange}
                     onFocus={() => scrollToPreview("preview-tujuan")}
-                    placeholder="Contoh: Jakarta"
-                    className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.tempatSurat ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                    placeholder="Nama Penerima/Perusahaan"
+                    className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-sm text-gray-900 dark:text-white ${errors.kepadanya ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                   />
-                  {errors.tempatSurat && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tempatSurat}</p>}
+                  {errors.kepadanya && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.kepadanya}</p>}
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Tanggal Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                  <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
+                    Alamat Tertuju <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                  </label>
+                  <textarea
+                    name="alamatTertuju"
+                    value={formData.alamatTertuju}
+                    onChange={handleChange}
+                    onFocus={() => scrollToPreview("preview-tujuan")}
+                    rows={3}
+                    placeholder="Alamat lengkap..."
+                    className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-sm text-gray-900 dark:text-white ${errors.alamatTertuju ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
+                  />
+                  {errors.alamatTertuju && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.alamatTertuju}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
+                    Provinsi / Kota <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                   </label>
                   <input
-                    type="date"
-                    name="tanggalSuratRaw"
-                    value={formData.tanggalSuratRaw}
+                    type="text"
+                    name="provinsi"
+                    value={formData.provinsi}
                     onChange={handleChange}
                     onFocus={() => scrollToPreview("preview-tujuan")}
-                    className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.tanggalSuratRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                    placeholder="Nama Provinsi/Kota"
+                    className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] text-sm text-gray-900 dark:text-white ${errors.provinsi ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                   />
-                  {errors.tanggalSuratRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tanggalSuratRaw}</p>}
+                  {errors.provinsi && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.provinsi}</p>}
                 </div>
               </div>
 
-              <hr className="my-4 border-gray-100" />
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Kepada Yth. (Nama Penerima/Perusahaan) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="kepadanya"
-                  value={formData.kepadanya}
-                  onChange={handleChange}
-                  onFocus={() => scrollToPreview("preview-tujuan")}
-                  placeholder="Nama Penerima/Perusahaan"
-                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.kepadanya ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
-                />
-                {errors.kepadanya && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.kepadanya}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Alamat Tertuju <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
-                </label>
-                <textarea
-                  name="alamatTertuju"
-                  value={formData.alamatTertuju}
-                  onChange={handleChange}
-                  onFocus={() => scrollToPreview("preview-tujuan")}
-                  rows={3}
-                  placeholder="Alamat lengkap..."
-                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.alamatTertuju ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
-                />
-                {errors.alamatTertuju && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.alamatTertuju}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Provinsi / Kota <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="provinsi"
-                  value={formData.provinsi}
-                  onChange={handleChange}
-                  onFocus={() => scrollToPreview("preview-tujuan")}
-                  placeholder="Nama Provinsi/Kota"
-                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm ${errors.provinsi ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
-                />
-                {errors.provinsi && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.provinsi}</p>}
-              </div>
+              {/* Action Button */}
+              <button
+                type="button"
+                onClick={() => changeTabAndScrollTop(type === "elektronik" ? "items" : "references")}
+                className="w-full bg-[#066027] hover:bg-[#04481d] text-white font-bold py-3 rounded-xl shadow-md transition-colors text-sm cursor-pointer mt-4"
+              >
+                Selanjutnya
+              </button>
             </div>
           )}
 
           {activeFormTab === "references" && type !== "elektronik" && (
             <div className="space-y-4">
+              <h4 className="text-sm font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wide mb-3">PERNYATAAN MENUNJUK</h4>
+
               {/* Referensi 1 */}
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
-                <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">1. Surat Penawaran Harga</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
+                <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">1. SURAT PENAWARAN HARGA</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Nomor Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3188,12 +3565,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref1No}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref1No ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref1No ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref1No && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref1No}</p>}
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Tanggal <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3202,7 +3579,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref1TglRaw}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref1TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref1TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref1TglRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref1TglRaw}</p>}
                   </div>
@@ -3210,11 +3587,11 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               </div>
 
               {/* Referensi 2 */}
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
-                <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">2. Berita Acara Negosiasi</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
+                <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">2. BERITA ACARA NEGOSIASI</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Nomor Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3223,12 +3600,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref2No}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref2No ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref2No ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref2No && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref2No}</p>}
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Tanggal <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3237,7 +3614,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref2TglRaw}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref2TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref2TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref2TglRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref2TglRaw}</p>}
                   </div>
@@ -3245,11 +3622,11 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               </div>
 
               {/* Referensi 3 */}
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
-                <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">3. Surat Penunjukan Pelaksana</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
+                <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">3. SURAT PENUNJUKAN PELAKSANA</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Nomor Surat <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3258,12 +3635,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref3No}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref3No ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref3No ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref3No && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref3No}</p>}
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Tanggal <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3272,49 +3649,74 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.ref3TglRaw}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-references")}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.ref3TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.ref3TglRaw ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.ref3TglRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.ref3TglRaw}</p>}
                   </div>
                 </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => changeTabAndScrollTop("header")}
+                  className="flex-1 bg-[#ffffff] hover:bg-gray-50 border border-gray-300/80 text-gray-700 dark:bg-[#1e3e2b] dark:hover:bg-[#29543b] dark:text-emerald-300 dark:border dark:border-emerald-800/60 font-semibold py-3 rounded-xl transition-colors text-sm cursor-pointer"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeTabAndScrollTop("items")}
+                  className="flex-1 bg-[#066027] hover:bg-[#04481d] text-white font-bold py-3 rounded-xl shadow-md transition-colors text-sm cursor-pointer"
+                >
+                  Selanjutnya
+                </button>
               </div>
             </div>
           )}
 
           {activeFormTab === "items" && (
             <div className="space-y-4">
-              <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wide">Rincian Proyek Pekerjaan</h4>
+              <h4 className="text-sm font-extrabold text-[#066027] uppercase tracking-wide mb-3">Rincian Proyek Pekerjaan</h4>
 
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-4">
-                {type === "kendaraan" ? (
+                {type === "elektronik" && (
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">Jenis Kendaraan</label>
-                    <input
-                      type="text"
-                      name="jenisElektronik"
-                      value={formData.jenisElektronik || ""}
-                      onChange={handleChange}
-                      placeholder="Contoh: Motor Honda Supra X125 PGM FI CW Tahun 2020"
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none text-xs"
-                    />
-                  </div>
-                ) : type === "elektronik" && (
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5">Jenis Elektronik</label>
+                    <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Jenis Elektronik</label>
                     <div className="flex gap-4">
-                      {["Komputer/PC", "Printer", "Laptop"].map((option) => (
-                        <label key={option} className="flex items-center gap-1.5 text-xs text-gray-700 font-semibold cursor-pointer">
-                          <input
-                            type="radio"
-                            name="jenisElektronik"
-                            value={option}
-                            checked={formData.jenisElektronik === option}
-                            onChange={handleChange}
-                            className="w-3.5 h-3.5 accent-emerald-600 cursor-pointer"
-                          />
-                          {option}
-                        </label>
-                      ))}
+                      {["Komputer/PC", "Printer", "Laptop"].map((option) => {
+                        const selectedList = formData.jenisElektronik ? formData.jenisElektronik.split(", ").map(s => s.trim()) : [];
+                        const isChecked = selectedList.includes(option);
+                        return (
+                          <label key={option} className="flex items-center gap-1.5 text-xs text-black dark:text-white font-bold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              name="jenisElektronik"
+                              value={option}
+                              checked={isChecked}
+                              onChange={(e) => {
+                                let nextSelected = [...selectedList];
+                                if (e.target.checked) {
+                                  if (!nextSelected.includes(option)) {
+                                    nextSelected.push(option);
+                                  }
+                                } else {
+                                  nextSelected = nextSelected.filter(item => item !== option);
+                                }
+                                // Keep order: Komputer/PC, Printer, Laptop
+                                const ordered = ["Komputer/PC", "Printer", "Laptop"].filter(opt => nextSelected.includes(opt));
+                                setFormData(prev => ({
+                                  ...prev,
+                                  jenisElektronik: ordered.join(", ")
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                            {option}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -3350,7 +3752,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                          <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                             Uraian Pekerjaan (Deskripsi Proyek) {idx === 0 && <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>}
                           </label>
                           <FormTextarea
@@ -3366,7 +3768,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                            <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                               Jumlah Volume / Qty {idx === 0 && <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>}
                             </label>
                             <input
@@ -3381,7 +3783,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                            <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                               {type === "kendaraan" ? "Harga Sewa per Unit/Bln" : "Harga Sewa per Unit"}
                             </label>
                             <input
@@ -3395,19 +3797,21 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-500 mb-1">
-                            {type === "kendaraan" ? "Jumlah Harga Sewa per Bulan" : "Jumlah Harga Sewa Perbulan"}
-                          </label>
-                          <input
-                            type="text"
-                            value={item.totalBulan !== undefined ? item.totalBulan : (idx === 0 ? formData.spkJumlah : "")}
-                            onChange={(e) => handleItemChange(idx, "totalBulan", e.target.value)}
-                            onFocus={() => scrollToPreview("preview-table")}
-                            placeholder="Contoh: 27.500.000"
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none text-xs font-mono font-bold"
-                          />
-                        </div>
+                        {type !== "kendaraan" && (
+                          <div>
+                            <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
+                              Jumlah Harga Sewa Perbulan
+                            </label>
+                            <input
+                              type="text"
+                              value={item.totalBulan !== undefined ? item.totalBulan : (idx === 0 ? formData.spkJumlah : "")}
+                              onChange={(e) => handleItemChange(idx, "totalBulan", e.target.value)}
+                              onFocus={() => scrollToPreview("preview-table")}
+                              placeholder="Contoh: 27.500.000"
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg outline-none text-xs font-mono font-bold"
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
 
@@ -3415,8 +3819,30 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
                     {/* Jangka Waktu Sewa & Dynamic Summary Totals */}
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3">
+                      {(type === "kendaraan" || type === "elektronik") && (
+                        <div className="flex items-center gap-2 pb-1.5 border-b border-gray-150">
+                          <input
+                            type="checkbox"
+                            id="isTermasukPajak"
+                            checked={!!formData.isTermasukPajak}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFormData((prev) => ({
+                                ...prev,
+                                isTermasukPajak: checked,
+                                pajakStatusText: checked ? "(Sudah Termasuk Pajak)" : "(Belum Termasuk Pajak)"
+                              }));
+                            }}
+                            className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <label htmlFor="isTermasukPajak" className="text-xs font-bold text-gray-700 cursor-pointer select-none">
+                            Sudah Termasuk Pajak
+                          </label>
+                        </div>
+                      )}
+
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Jangka Waktu Sewa (Bulan) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3429,14 +3855,14 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           }}
                           onFocus={() => scrollToPreview("preview-table")}
                           placeholder="Contoh: 36"
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkBulan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkBulan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkBulan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkBulan}</p>}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                          <label className="block text-[11px] font-bold text-gray-900 mb-1">
                             {type === "kendaraan" ? "Jumlah Harga Sewa per Bulan" : "Total Harga Sewa Per Bulan"} <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                           </label>
                           <input
@@ -3445,12 +3871,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                             value={formData.spkJumlah}
                             onChange={(e) => handleSpkJumlahChange(e.target.value, formData.spkBulan)}
                             onFocus={() => scrollToPreview("preview-table")}
-                            className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJumlah ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                            className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJumlah ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                           />
                           {errors.spkJumlah && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkJumlah}</p>}
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                          <label className="block text-[11px] font-bold text-gray-900 mb-1">
                             {type === "kendaraan" ? "Harga Total Sewa" : "Total Harga Sewa"} <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                           </label>
                           <input
@@ -3459,7 +3885,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                             value={formData.spkDibulatkan}
                             onChange={handleChange}
                             onFocus={() => scrollToPreview("preview-table")}
-                            className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-black text-emerald-700 ${errors.spkDibulatkan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                            className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-black text-emerald-700 ${errors.spkDibulatkan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                           />
                           {errors.spkDibulatkan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkDibulatkan}</p>}
                         </div>
@@ -3469,7 +3895,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                         Uraian Pekerjaan (Deskripsi Proyek) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <FormTextarea
@@ -3477,13 +3903,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onChange={(e) => setProjectUraian(e.target.value)}
                         onFocus={() => scrollToPreview("preview-table")}
                         placeholder="Contoh: Pekerjaan Renovasi Gedung..."
-                        className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.projectUraian ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.projectUraian ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.projectUraian && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.projectUraian}</p>}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                         Jumlah Volume / Qty <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3492,7 +3918,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onChange={(e) => setProjectJumlah(e.target.value)}
                         onFocus={() => scrollToPreview("preview-table")}
                         placeholder="Contoh: 1 Ls"
-                        className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.projectJumlah ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs ${errors.projectJumlah ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.projectJumlah && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.projectJumlah}</p>}
                     </div>
@@ -3501,7 +3927,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Jumlah (Base Price) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3510,13 +3936,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkJumlah}
                           onChange={(e) => handleSpkJumlahChange(e.target.value)}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJumlah ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJumlah ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkJumlah && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkJumlah}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Jasa Kontraktor 10% <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3525,7 +3951,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkJasa}
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJasa ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkJasa ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkJasa && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkJasa}</p>}
                       </div>
@@ -3533,7 +3959,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Sub Total <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3542,13 +3968,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkSubTotal}
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-semibold ${errors.spkSubTotal ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-semibold ${errors.spkSubTotal ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkSubTotal && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkSubTotal}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           PPN 11% <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3557,7 +3983,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkPpn}
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkPpn ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono ${errors.spkPpn ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkPpn && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkPpn}</p>}
                       </div>
@@ -3565,7 +3991,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Total <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3574,13 +4000,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkTotal}
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-bold ${errors.spkTotal ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-bold ${errors.spkTotal ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkTotal && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkTotal}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-[11px] font-bold text-gray-900 mb-1">
                           Dibulatkan (Final) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3589,7 +4015,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.spkDibulatkan}
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-table")}
-                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-black text-emerald-700 ${errors.spkDibulatkan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-3 py-2 bg-white border rounded-lg outline-none text-xs font-mono font-black text-emerald-700 ${errors.spkDibulatkan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.spkDibulatkan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.spkDibulatkan}</p>}
                       </div>
@@ -3625,52 +4051,108 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                   </p>
                 )}
               </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => changeTabAndScrollTop(type === "elektronik" ? "header" : "references")}
+                  className="flex-1 bg-[#ffffff] hover:bg-gray-50 border border-gray-300/80 text-gray-700 dark:bg-[#1e3e2b] dark:hover:bg-[#29543b] dark:text-emerald-300 dark:border dark:border-emerald-800/60 font-semibold py-3 rounded-xl transition-colors text-sm cursor-pointer"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeTabAndScrollTop("terms")}
+                  className="flex-1 bg-[#066027] hover:bg-[#04481d] text-white font-bold py-3 rounded-xl shadow-md transition-colors text-sm cursor-pointer"
+                >
+                  Selanjutnya
+                </button>
+              </div>
             </div>
           )}
 
           {activeFormTab === "terms" && (
             <div className="space-y-4">
               <div>
-                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-3">Syarat & Ketentuan</h4>
+                <h4 className="text-sm font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wide mb-3">Syarat & Ketentuan</h4>
                 {type === "kendaraan" ? (
                   <div className="space-y-4">
                     {/* Syarat 1 (a,b) */}
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3">
-                      <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Syarat 1 (Perpajakan & Sewa)</span>
+                    <div className="p-4 bg-gray-50/70 dark:bg-[#14261c] rounded-xl border border-gray-300 dark:border-gray-700 space-y-3 shadow-2xs">
+                      <span className="text-xs font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wider block">Syarat 1 (Perpajakan & Sewa)</span>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
-                          Poin a (Pajak) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
+                          Poin a (Persentase Pajak) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
-                        <input
-                          type="text"
-                          name="syarat1aKendaraanText"
-                          value={formData.syarat1aKendaraanText}
-                          onChange={handleChange}
-                          onFocus={() => scrollToPreview("preview-terms")}
-                          placeholder="Harga yang tertera sudah termasuk Pajak-pajak 11%"
-                          className={`w-full px-4 py-2 bg-white border rounded-xl outline-none text-xs ${errors.syarat1aKendaraanText ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={extractPajakPersen(formData.syarat1aKendaraanText)}
+                            onChange={(e) => {
+                              const newPersen = e.target.value;
+                              const newText = newPersen ? `Harga yang tertera sudah termasuk Pajak-pajak ${newPersen}%` : "";
+                              setFormData(prev => ({
+                                ...prev,
+                                syarat1aKendaraanText: newText
+                              }));
+                              if (errors.syarat1aKendaraanText) {
+                                setErrors(prev => {
+                                  const next = { ...prev };
+                                  delete next.syarat1aKendaraanText;
+                                  return next;
+                                });
+                              }
+                            }}
+                            onFocus={() => scrollToPreview("preview-terms")}
+                            className={`w-24 px-3 py-2 bg-white dark:bg-[#1a2e22] border rounded-lg outline-none text-xs font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat1aKendaraanText ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
+                          />
+                          <span className="text-xs text-gray-500 dark:text-gray-400 font-bold">%</span>
+                        </div>
                         {errors.syarat1aKendaraanText && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat1aKendaraanText}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">Poin b (Jangka Waktu Sewa)</label>
-                        <textarea
-                          name="syarat1bKendaraanText"
-                          value={formData.syarat1bKendaraanText}
-                          onChange={handleChange}
-                          onFocus={() => scrollToPreview("preview-terms")}
-                          rows={2}
-                          placeholder="Contoh: selama 12 Bulan. Berlaku dari 23 Juli sampai dengan 22 Juli 2025"
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-xs"
-                        />
+                        <span className="block text-xs font-bold text-black dark:text-white mb-1.5">Poin b (Jangka Waktu Sewa)</span>
+
+                        <div className="grid grid-cols-2 gap-3 mt-1.5">
+                          <div>
+                            <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
+                              Tanggal Berlaku Mulai
+                            </label>
+                            <input
+                              type="date"
+                              name="tanggalBerlakuMulai"
+                              value={formData.tanggalBerlakuMulai || ""}
+                              onChange={(e) => handleTanggalBerlakuChange("tanggalBerlakuMulai", e.target.value)}
+                              onFocus={() => scrollToPreview("preview-terms")}
+                              className="w-full px-3 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-lg outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
+                              Tanggal Berlaku Sampai
+                            </label>
+                            <input
+                              type="date"
+                              name="tanggalBerlakuSampai"
+                              value={formData.tanggalBerlakuSampai || ""}
+                              onChange={(e) => handleTanggalBerlakuChange("tanggalBerlakuSampai", e.target.value)}
+                              onFocus={() => scrollToPreview("preview-terms")}
+                              className="w-full px-3 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-lg outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Syarat 2 */}
                     <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">Syarat 2: Hubungan SPK</label>
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Syarat 2: Hubungan SPK</label>
                       <textarea
                         name="syarat2KendaraanText"
                         value={formData.syarat2KendaraanText}
@@ -3678,71 +4160,28 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onFocus={() => scrollToPreview("preview-terms")}
                         rows={2}
                         placeholder="Contoh: SPK ini merupakan bagian yang tidak terpisahkan dari SPK nomor 1142/00020.02/2020"
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.syarat2KendaraanText ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2 bg-gray-50 dark:bg-[#1a2e22] border rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat2KendaraanText ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
                       />
                       {errors.syarat2KendaraanText && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat2KendaraanText}</p>}
                     </div>
 
-                    {/* Syarat 4 */}
+                    {/* Syarat 3 */}
                     <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">Syarat 4: Ketentuan Pembayaran Unit</label>
-                      <textarea
-                        name="syarat4KendaraanText"
-                        value={formData.syarat4KendaraanText}
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Syarat 3: Jenis Kendaraan</label>
+                      <input
+                        type="text"
+                        name="jenisElektronik"
+                        value={formData.jenisElektronik || ""}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-terms")}
-                        rows={2}
-                        placeholder="Jumlah biaya/harga akan dibayarkan sesuai dengan jumlah unit yang digunakan."
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs"
-                      />
-                    </div>
-
-                    {/* Syarat 5: Checklist Kelengkapan Dokumen */}
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3">
-                      <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Syarat 5 (Kelengkapan Dokumen Pembayaran)</span>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">Pengantar Syarat 5</label>
-                        <input
-                          type="text"
-                          name="syarat5IntroKendaraanText"
-                          value={formData.syarat5IntroKendaraanText}
-                          onChange={handleChange}
-                          onFocus={() => scrollToPreview("preview-terms")}
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-xs font-semibold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-bold text-gray-500">Daftar Dokumen (a s/d h)</label>
-                        {syarat4Items.map((item) => (
-                          <div key={item.key} className="flex gap-2 items-center">
-                            <span className="text-xs font-bold text-gray-500 w-4">{item.key}.</span>
-                            <input
-                              type="text"
-                              value={item.text}
-                              onChange={(e) => handleListChange("syarat4", item.key, e.target.value)}
-                              className="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg outline-none text-xs"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Syarat 6 */}
-                    <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">Syarat 6: Ketentuan Khusus</label>
-                      <textarea
-                        name="syarat6KendaraanText"
-                        value={formData.syarat6KendaraanText}
-                        onChange={handleChange}
-                        onFocus={() => scrollToPreview("preview-terms")}
-                        rows={3}
-                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs"
+                        placeholder="Contoh: Motor Honda Supra X125 PGM FI CW Tahun 2020"
+                        className="w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
                       />
                     </div>
 
                     {/* Tanggal Persetujuan */}
                     <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                         Tanggal Penerimaan & Persetujuan <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3751,7 +4190,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.tanggalPersetujuanRaw}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.tanggalPersetujuanRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2 bg-gray-50 dark:bg-[#1a2e22] border rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.tanggalPersetujuanRaw ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
                       />
                       {errors.tanggalPersetujuanRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tanggalPersetujuanRaw}</p>}
                     </div>
@@ -3759,11 +4198,11 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                 ) : type === "elektronik" ? (
                   <div className="space-y-4">
                     {/* Syarat 1 (a,b,c,d) */}
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3">
-                      <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Syarat 1 (Jangka Waktu & Sewa)</span>
+                    <div className="p-4 bg-gray-50 dark:bg-[#14261c] rounded-xl border border-gray-200/60 dark:border-gray-700 space-y-3">
+                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">Syarat 1 (Jangka Waktu & Sewa)</span>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                           Poin a <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3773,12 +4212,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           onChange={handleChange}
                           onFocus={() => scrollToPreview("preview-terms")}
                           placeholder="Contoh: 30"
-                          className={`w-full px-4 py-2 bg-white border rounded-xl outline-none text-xs ${errors.syarat1aHari ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat1aHari ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
                         />
                         {errors.syarat1aHari && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat1aHari}</p>}
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">Poin b</label>
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Poin b</label>
                         <textarea
                           name="syarat1bText"
                           value={formData.syarat1bText}
@@ -3786,12 +4225,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           onFocus={() => scrollToPreview("preview-terms")}
                           rows={2}
                           placeholder="Contoh: 30 (tiga puluh) hari kerja sejak SPK ini diterima langsung..."
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-xs"
+                          className="w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">Poin c</label>
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Poin c</label>
                         <textarea
                           name="syarat1cText"
                           value={formData.syarat1cText}
@@ -3799,12 +4238,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           onFocus={() => scrollToPreview("preview-terms")}
                           rows={2}
                           placeholder="Contoh: 36 (Tiga Puluh Enam) Bulan sejak serah terima barang"
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-xs"
+                          className="w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">Poin d</label>
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1.5">Poin d</label>
                         <textarea
                           name="syarat1dText"
                           value={formData.syarat1dText}
@@ -3812,14 +4251,14 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           onFocus={() => scrollToPreview("preview-terms")}
                           rows={2}
                           placeholder="Contoh: selama 36 (Tiga Puluh Enam) Bulan terhitung sejak Serah Terima."
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-xs"
+                          className="w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border border-gray-200 dark:border-gray-600 rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027]"
                         />
                       </div>
                     </div>
 
                     {/* Syarat 2 */}
                     <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                         Syarat 2: Ketentuan Denda <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <textarea
@@ -3829,14 +4268,14 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onFocus={() => scrollToPreview("preview-terms")}
                         rows={3}
                         placeholder="Tuliskan detail denda..."
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.syarat2ElektronikText ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2 bg-gray-50 dark:bg-[#1a2e22] border rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat2ElektronikText ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
                       />
                       {errors.syarat2ElektronikText && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat2ElektronikText}</p>}
                     </div>
 
                     {/* Tanggal Persetujuan */}
                     <div>
-                      <label className="block text-xs text-gray-600 font-semibold mb-1">
+                      <label className="block text-xs font-bold text-black dark:text-white mb-1.5">
                         Tanggal Penerimaan & Persetujuan <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3845,15 +4284,16 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.tanggalPersetujuanRaw}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.tanggalPersetujuanRaw ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2 bg-gray-50 dark:bg-[#1a2e22] border rounded-xl outline-none text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.tanggalPersetujuanRaw ? "border-red-500 focus:border-red-500" : "border-gray-200 dark:border-gray-600"}`}
                       />
                       {errors.tanggalPersetujuanRaw && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.tanggalPersetujuanRaw}</p>}
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 font-medium mb-1">
+                  <div className="space-y-4">
+                    {/* Syarat 1 Card */}
+                    <div className="p-4 sm:p-5 bg-gray-50/70 dark:bg-[#14261c] rounded-2xl border border-gray-300/80 dark:border-gray-700 space-y-2">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white">
                         Syarat 1: Jangka Waktu (Hari) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3863,14 +4303,15 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onChange={(e) => handleSyarat1HariChange(e.target.value)}
                         onFocus={() => scrollToPreview("preview-terms")}
                         placeholder="Contoh: 30"
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.syarat1Hari ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2.5 bg-white dark:bg-[#1a2e22] border rounded-xl sm:rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat1Hari ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.syarat1Hari && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat1Hari}</p>}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
-                        <label className="block text-xs text-gray-600 font-medium">
+                    {/* Syarat 2 Grid Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 sm:p-5 bg-gray-50/70 dark:bg-[#14261c] rounded-2xl border border-gray-300/80 dark:border-gray-700 space-y-2.5">
+                        <label className="block text-xs font-bold text-gray-900 dark:text-white">
                           Syarat 2: Nilai Denda <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3879,23 +4320,24 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.syarat2DendaVal}
                           onChange={(e) => handleSyarat2Change("syarat2DendaVal", e.target.value)}
                           onFocus={() => scrollToPreview("preview-terms")}
-                          className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.syarat2DendaVal ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border rounded-xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat2DendaVal ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.syarat2DendaVal && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat2DendaVal}</p>}
-                        <select
+                        <CustomSelectDropdown
                           name="syarat2DendaUnit"
                           value={formData.syarat2DendaUnit}
-                          onChange={(e) => handleSyarat2Change("syarat2DendaUnit", e.target.value)}
+                          onChange={(e) => handleSyarat2Change("syarat2DendaUnit", e.target ? e.target.value : e)}
                           onFocus={() => scrollToPreview("preview-terms")}
-                          className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none text-xs cursor-pointer"
-                        >
-                          <option value="‰">Perseribu (‰)</option>
-                          <option value="%">Persen (%)</option>
-                        </select>
+                          options={[
+                            { label: "Perseribu (‰)", value: "‰" },
+                            { label: "Persen (%)", value: "%" }
+                          ]}
+                          placeholder="Pilih Satuan Denda..."
+                        />
                       </div>
 
-                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
-                        <label className="block text-xs text-gray-600 font-medium">
+                      <div className="p-4 sm:p-5 bg-gray-50/70 dark:bg-[#14261c] rounded-2xl border border-gray-300/80 dark:border-gray-700 space-y-2.5">
+                        <label className="block text-xs font-bold text-gray-900 dark:text-white">
                           Syarat 2: Maksimal Denda <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                         </label>
                         <input
@@ -3904,24 +4346,26 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                           value={formData.syarat2MaxVal}
                           onChange={(e) => handleSyarat2Change("syarat2MaxVal", e.target.value)}
                           onFocus={() => scrollToPreview("preview-terms")}
-                          className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.syarat2MaxVal ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                          className={`w-full px-4 py-2 bg-white dark:bg-[#1a2e22] border rounded-xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] ${errors.syarat2MaxVal ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                         />
                         {errors.syarat2MaxVal && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat2MaxVal}</p>}
-                        <select
+                        <CustomSelectDropdown
                           name="syarat2MaxUnit"
                           value={formData.syarat2MaxUnit}
-                          onChange={(e) => handleSyarat2Change("syarat2MaxUnit", e.target.value)}
+                          onChange={(e) => handleSyarat2Change("syarat2MaxUnit", e.target ? e.target.value : e)}
                           onFocus={() => scrollToPreview("preview-terms")}
-                          className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none text-xs cursor-pointer"
-                        >
-                          <option value="%">Persen (%)</option>
-                          <option value="‰">Perseribu (‰)</option>
-                        </select>
+                          options={[
+                            { label: "Persen (%)", value: "%" },
+                            { label: "Perseribu (‰)", value: "‰" }
+                          ]}
+                          placeholder="Pilih Satuan Maksimal Denda..."
+                        />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs text-gray-600 font-medium mb-1">
+                    {/* Syarat 3 Card */}
+                    <div className="p-4 sm:p-5 bg-gray-50/70 dark:bg-[#14261c] rounded-2xl border border-gray-300/80 dark:border-gray-700 space-y-2">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white">
                         Syarat 3: Detail Pembayaran (Tahapan) <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <textarea
@@ -3930,7 +4374,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-terms")}
                         rows={4}
-                        className={`w-full px-4 py-2 bg-gray-50 border rounded-xl outline-none text-xs ${errors.syarat3Text ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-3 bg-white dark:bg-[#1a2e22] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.syarat3Text ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.syarat3Text && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.syarat3Text}</p>}
                     </div>
@@ -3938,16 +4382,16 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                 )}
               </div>
 
-              <hr className="my-4 border-gray-100" />
+              <hr className="my-4 border-gray-200" />
 
               <div>
-                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-3">Tanda Tangan Pihak</h4>
+                <h4 className="text-sm font-extrabold text-[#066027] dark:text-emerald-400 uppercase tracking-wide mb-3">TANDA TANGAN PIHAK</h4>
 
                 {/* TTD KIRI */}
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 mb-3 space-y-3">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Pihak I (Pelaksana / Kiri)</span>
+                <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 mb-4 space-y-4 shadow-xs">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">PIHAK I (PELAKSANA / KIRI)</span>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Nama Perusahaan <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <input
@@ -3956,13 +4400,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       value={formData.sigKiriPerusahaan}
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-signatures")}
-                      className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs font-semibold ${errors.sigKiriPerusahaan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKiriPerusahaan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.sigKiriPerusahaan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKiriPerusahaan}</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                         Nama Lengkap <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3971,12 +4415,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.sigKiriNama}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.sigKiriNama ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKiriNama ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.sigKiriNama && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKiriNama}</p>}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                         Jabatan <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -3985,7 +4429,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.sigKiriJabatan}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.sigKiriJabatan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKiriJabatan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.sigKiriJabatan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKiriJabatan}</p>}
                     </div>
@@ -3993,10 +4437,10 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                 </div>
 
                 {/* TTD KANAN */}
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Pihak II (Pemberi Tugas / Kanan)</span>
+                <div className="p-5 bg-white dark:bg-[#14261c] rounded-2xl border border-gray-300 dark:border-gray-700 space-y-4 shadow-xs">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">PIHAK II (PEMBERI TUGAS / KANAN)</span>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                       Nama Lembaga <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                     </label>
                     <textarea
@@ -4005,13 +4449,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                       onChange={handleChange}
                       onFocus={() => scrollToPreview("preview-signatures")}
                       rows={2}
-                      className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs font-semibold ${errors.sigKananPerusahaan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKananPerusahaan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                     />
                     {errors.sigKananPerusahaan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKananPerusahaan}</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                         Nama Lengkap <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -4020,12 +4464,12 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.sigKananNama}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.sigKananNama ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKananNama ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.sigKananNama && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKananNama}</p>}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1">
+                      <label className="block text-xs font-bold text-gray-900 dark:text-white mb-1.5">
                         Jabatan <span className="text-red-500 font-bold ml-0.5" title="Wajib diisi">*</span>
                       </label>
                       <input
@@ -4034,89 +4478,85 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
                         value={formData.sigKananJabatan}
                         onChange={handleChange}
                         onFocus={() => scrollToPreview("preview-signatures")}
-                        className={`w-full px-3 py-1.5 bg-white border rounded-lg outline-none text-xs ${errors.sigKananJabatan ? "border-red-500 focus:border-red-500" : "border-gray-200"}`}
+                        className={`w-full px-4 py-2.5 bg-white dark:bg-[#0f1712] border rounded-2xl outline-none text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#066027]/20 focus:border-[#066027] ${errors.sigKananJabatan ? "border-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
                       />
                       {errors.sigKananJabatan && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.sigKananJabatan}</p>}
                     </div>
                   </div>
                 </div>
 
+                {/* Action Buttons */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => changeTabAndScrollTop("items")}
+                    className="flex-1 bg-[#ffffff] hover:bg-gray-50 border border-gray-300/80 text-gray-700 dark:bg-[#1e3e2b] dark:hover:bg-[#29543b] dark:text-emerald-300 dark:border dark:border-emerald-800/60 font-semibold py-3 rounded-xl transition-colors text-sm cursor-pointer"
+                  >
+                    Sebelumnya
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitHistory}
+                    disabled={isSubmitting}
+                    className="flex-1 bg-[#066027] hover:bg-[#04481d] text-white font-bold py-3 rounded-xl shadow-md transition-colors text-sm cursor-pointer disabled:opacity-70 flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? "Menyimpan..." : "Submit & Simpan SPK"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* RIGHT PANE: Live Interactive Preview */}
-      <div className="xl:col-span-7 flex flex-col items-center overflow-y-auto w-full pr-2 max-h-[90vh] print:h-auto print:overflow-visible">
-        {/* Helper bar */}
-        <div className="w-full max-w-[210mm] bg-amber-50 border border-amber-200/70 p-3 rounded-xl mb-3 flex items-center justify-between no-print shadow-sm text-amber-900 text-xs">
-          <div className="flex items-center gap-2">
+      <div
+        ref={previewScrollContainerRef}
+        onScroll={(e) => {
+          const isActive = activeTab === `spk_${type}`;
+          if (isActive) {
+            previewScrollTopRef.current = e.currentTarget.scrollTop;
+          }
+        }}
+        className="xl:col-span-7 flex flex-col items-center overflow-y-auto overflow-x-auto w-full px-4 pt-4 pb-6 max-h-[90vh] print:h-auto print:overflow-visible bg-slate-100/80 dark:bg-[#0c1410] border border-gray-200/80 dark:border-[#213527] rounded-2xl"
+      >
+        {/* Yellow Helper Banner with Zoom Controls */}
+        <div className="w-full max-w-[210mm] bg-[#fff9db] border-2 border-amber-400/80 p-3 rounded-xl mb-3 flex flex-col sm:flex-row items-center justify-between no-print shadow-xs text-amber-950 text-xs gap-3 shrink-0 overflow-hidden bg-clip-padding">
+          <div className="flex items-center gap-2 font-semibold">
             <span className="text-base">💡</span>
-            <span>Anda dapat mengedit tulisan secara langsung di lembar pratinjau A4.</span>
+            <span>Anda dapat mengedit langsung pada pratinjau A4.</span>
           </div>
-          <button
-            type="button"
-            onClick={handleSubmitHistory}
-            disabled={isSubmitting}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl shadow transition-all text-xs cursor-pointer shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            title="Submit dan simpan SPK ke Riwayat"
-          >
-            {isSubmitting ? (
-              <>
-                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Menyimpan...</span>
-              </>
-            ) : (
-              <span>Submit</span>
-            )}
-          </button>
-        </div>
 
-        {/* Zoom Control Bar */}
-        <div className="w-full max-w-[210mm] bg-white border border-gray-200 shadow-sm p-3 rounded-xl mb-4 flex flex-col sm:flex-row items-center justify-between no-print text-xs gap-3">
-          <div className="flex items-center gap-2 text-gray-700 font-semibold w-full sm:w-auto justify-between sm:justify-start">
-            <span>🔎 Ukuran Pratinjau:</span>
-            <input
-              type="range"
-              min="0.5"
-              max="1.5"
-              step="0.05"
-              value={zoomLevel}
-              onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
-              className="w-32 accent-emerald-600 cursor-pointer"
-            />
-            <span className="font-mono w-10 text-right">{Math.round(zoomLevel * 100)}%</span>
-          </div>
-          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-1.5 shrink-0 bg-white border border-amber-400/80 px-2 py-1 rounded-lg select-none shadow-2xs">
+            <span className="text-gray-500 font-semibold mr-1">🔎</span>
             <button
-              onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))}
-              className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-bold transition-colors"
-              title="Perkecil"
+              type="button"
+              onClick={() => setZoomLevel(prev => Math.max(0.5, Math.round((prev - 0.05) * 100) / 100))}
+              className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded text-gray-700 font-bold transition-colors text-xs cursor-pointer"
+              title="Perkecil (-5%)"
             >
               -
             </button>
             <button
-              onClick={() => setZoomLevel(0.7)}
-              className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
-              title="Reset ke Default"
+              type="button"
+              onClick={() => setZoomLevel(0.8)}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${Math.round(zoomLevel * 100) !== 100 ? "bg-amber-200 text-amber-900 font-bold border border-amber-300/80" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+              title="Reset ke 80%"
             >
-              70%
+              {Math.round(zoomLevel * 100)}%
             </button>
             <button
+              type="button"
               onClick={() => setZoomLevel(1.0)}
-              className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
-              title="Ukuran Nyata"
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${Math.round(zoomLevel * 100) === 100 ? "bg-amber-200 text-amber-900 font-bold border border-amber-300/80" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+              title="Ukuran 100%"
             >
               100%
             </button>
             <button
-              onClick={() => setZoomLevel(prev => Math.min(1.5, prev + 0.1))}
-              className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-bold transition-colors"
-              title="Perbesar"
+              type="button"
+              onClick={() => setZoomLevel(prev => Math.min(1.5, Math.round((prev + 0.05) * 100) / 100))}
+              className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded text-gray-700 font-bold transition-colors text-xs cursor-pointer"
+              title="Perbesar (+5%)"
             >
               +
             </button>
@@ -4124,14 +4564,17 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         </div>
 
         {/* The Document Paper (Dynamic A4 Paged SPK Layout) */}
-        <div 
-          className="w-full flex justify-center print:h-auto print:overflow-visible shrink-0" 
-          style={{ height: `${((activePageGroups.length * 1122.5) + ((activePageGroups.length - 1) * 24)) * zoomLevel + 32}px`, overflow: 'hidden' }}
+        <div
+          className="w-full flex justify-center print:h-auto print:overflow-visible shrink-0 py-2"
         >
-          <div id={`spk-print-area-${type}`} className="flex flex-col gap-6 w-full max-w-[210mm] print:gap-0 print:w-auto origin-top shrink-0" style={{ zoom: zoomLevel }}>
+          <div
+            id={`spk-print-area-${type}`}
+            className="flex flex-col gap-6 print:gap-0 print:w-auto origin-top shrink-0 items-center"
+            style={{ width: "210mm", zoom: zoomLevel, boxSizing: "border-box" }}
+          >
             {activePageGroups.map((pageBlockIds, pageIdx) => {
               return (
-                <div key={pageIdx} className="spk-paper w-full shadow-md select-text print:shadow-none print:border-none relative shrink-0 pb-16 print:pb-0">
+                <div key={pageIdx} className="spk-paper w-full bg-white border-2 border-gray-400 dark:border-gray-500 shadow-2xl ring-1 ring-black/10 rounded-xs select-text print:shadow-none print:border-none print:ring-0 relative shrink-0 pb-16 print:pb-0">
                   <HeaderLogo id={`page-header-${pageIdx}`} />
                   <div className="spk-content pb-4">
                     {renderPageBlocks(pageBlockIds)}
@@ -4162,9 +4605,15 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
       </div>
 
       {/* Custom Validation Error Modal */}
-      {showValidationModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm no-print">
-          <div className="bg-white dark:bg-[#1a2b20] border border-gray-200 dark:border-[#2b4533] rounded-2xl max-w-md w-full shadow-2xl p-6 transition-all duration-200 transform scale-100 animate-scale-up">
+      {showValidationModal && typeof document !== "undefined" && createPortal(
+        <div 
+          onClick={() => setShowValidationModal(false)}
+          className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm no-print animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-[#1a2b20] border border-gray-200 dark:border-[#2b4533] rounded-2xl max-w-md w-full shadow-2xl p-6 transition-all duration-200 transform scale-100 animate-scale-up"
+          >
             <div className="flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -4184,8 +4633,31 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Letter Number Settings Modal (Admin Only) */}
+      {isAdmin && (
+        <LetterNumberSettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          letterType="spk"
+          title="Pengaturan Nomor Surat SPK"
+          onSettingsSaved={(data) => {
+            if (data?.setting?.mode) setLetterNumberMode(data.setting.mode);
+            fetchNextSpkNumber();
+          }}
+        />
+      )}
+
+      {/* Pop Up Peringatan Hari Akhir Pekan (Tengah Halaman) */}
+      <WeekendWarningModal
+        isOpen={showWeekendModal}
+        onClose={() => setShowWeekendModal(false)}
+        title="Hari Akhir Pekan Terpilih"
+        message={weekendModalMessage || "Hari Sabtu & Minggu tidak dapat digunakan untuk pembuatan surat. Harap pilih tanggal pada hari kerja (Senin s.d. Jumat)."}
+      />
     </div>
   );
 }

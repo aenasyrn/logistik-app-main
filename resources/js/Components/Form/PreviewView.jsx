@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import { ArrowLeft, Save, Printer } from "lucide-react";
+import WeekendWarningModal from "../Common/WeekendWarningModal";
 
 const PreviewView = ({
   formData,
@@ -9,11 +11,28 @@ const PreviewView = ({
   handleSaveTransaction,
   isSaving,
 }) => {
+  const [showWeekendModal, setShowWeekendModal] = useState(false);
+
   const handlePrint = () => {
     document.body.classList.add("print-handover-only");
     window.print();
     document.body.classList.remove("print-handover-only");
   };
+
+  const isWeekend = (dateStr) => {
+    if (!dateStr) return false;
+    const parts = String(dateStr).split("T")[0].split("-");
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      const day = d.getDay();
+      return day === 0 || day === 6;
+    }
+    const d = new Date(dateStr);
+    const day = d.getDay();
+    return day === 0 || day === 6;
+  };
+
+  const isTanggalWeekend = isWeekend(formData?.tanggal);
 
   return (
     <div className="w-full max-w-4xl mx-auto bg-white mt-6 shadow-xl relative print:shadow-none print:m-0 print:p-0 print:max-w-none print:bg-transparent">
@@ -21,16 +40,29 @@ const PreviewView = ({
       <div className="print:hidden p-4 bg-gray-100 flex justify-between items-center sticky top-0 z-10 border-b">
         <button
           onClick={() => setView("form")}
-          className="flex items-center gap-2 text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-55 font-medium transition-colors"
+          className="flex items-center gap-2 text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-55 font-medium transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />{" "}
           Edit Kembali
         </button>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          {isTanggalWeekend && (
+            <span className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
+              ⚠️ Hari Sabtu & Minggu tidak dapat disubmit (hanya Senin s.d. Jumat).
+            </span>
+          )}
           <button
-            onClick={handleSaveTransaction}
-            disabled={isSaving}
-            className={`flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${isSaving ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+            onClick={() => {
+              if (isTanggalWeekend) {
+                setShowWeekendModal(true);
+                return;
+              }
+              handleSaveTransaction();
+            }}
+            disabled={isSaving || isTanggalWeekend}
+            className={`flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
+              isSaving || isTanggalWeekend ? "opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400" : "cursor-pointer"
+            }`}
           >
             {isSaving ? (
               <>
@@ -55,7 +87,19 @@ const PreviewView = ({
         {/* Konten Utama */}
         <div className="print:pb-4">
           {/* Header Surat */}
-          <div className="flex items-center justify-end mb-8 print:mb-6 border-b-[3px] border-black pb-5 print:pb-3">
+          <div className="flex items-center justify-between mb-8 print:mb-6 border-b-[3px] border-black pb-5 print:pb-3">
+            <div className="flex items-center">
+              <img
+                src="/logo-pegadaian.png"
+                alt="Logo Pegadaian"
+                className="h-12 sm:h-14 print:h-12 object-contain"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src =
+                    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' width='120' height='30'><g transform='translate(5, 5)'><circle cx='15' cy='15' r='12' fill='%23d2e460' opacity='0.9'/><circle cx='27' cy='15' r='12' fill='%2382c68c' opacity='0.9'/><circle cx='39' cy='15' r='12' fill='%233fb48f' opacity='0.9'/><text x='58' y='22' font-family='Arial, sans-serif' font-weight='bold' font-size='16' fill='%23065f46'>Pegadaian</text></g></svg>";
+                }}
+              />
+            </div>
             <div className="text-right">
               <h1 className="text-2xl print:text-[18px] font-bold uppercase tracking-wider text-gray-900 leading-tight">
                 Departemen Logistik
@@ -118,7 +162,7 @@ const PreviewView = ({
                   Satuan
                 </th>
                 <th className="border border-black py-2 px-2 text-left w-[20%]">
-                  Outlet Tujuan
+                  {formData.jenisTransaksi === "Barang Masuk" ? "Outlet Asal" : "Outlet Tujuan"}
                 </th>
                 <th className="border border-black py-2 px-2 text-left w-[15%]">
                   Keterangan
@@ -206,7 +250,7 @@ const PreviewView = ({
         {/* FOOTER */}
         <div id="print-footer" className="mt-8 print:mt-0 print:fixed print:bottom-4 print:left-12 print:right-12 print:bg-white text-left text-[11px] text-gray-800 border-t-[2px] border-black pt-4 print:pt-2 print:text-[10px]">
           <p className="font-bold text-[12px] print:text-[11px] text-gray-900 leading-tight">
-            PT. PEGADAIAN
+            PT. PEGADAIAN (PERSERO)
           </p>
           <p className="leading-tight mt-0.5">Kantor Wilayah VIII Jakarta 1</p>
           <p className="leading-tight mt-0.5">
@@ -217,6 +261,14 @@ const PreviewView = ({
           </p>
         </div>
       </div>
+
+      {/* Pop Up Peringatan Hari Akhir Pekan (Tengah Halaman) */}
+      <WeekendWarningModal
+        isOpen={showWeekendModal}
+        onClose={() => setShowWeekendModal(false)}
+        title="Hari Akhir Pekan Terpilih"
+        message="Hari Sabtu & Minggu tidak dapat digunakan untuk pembuatan surat. Harap pilih tanggal pada hari kerja (Senin s.d. Jumat)."
+      />
     </div>
   );
 };

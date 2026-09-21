@@ -1,7 +1,8 @@
 // resources/js/services/printerService.js
 import axios from 'axios';
 import { router } from '@inertiajs/react';
-import { parseIndoDateToISO } from "../utils/deviceUtils";
+import { parseIndoDateToISO, parseRobustDate } from "../utils/deviceUtils";
+import { downloadExcelTemplate } from '../utils/excelHelper';
 
 /**
  * Tambah satu data printer.
@@ -36,40 +37,96 @@ export const deletePrinter = async (appId, id) => {
 export const importPrinterCSV = async (appId, rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
+  const normalizeKey = (key) => {
+    return key
+      .replace(/^\uFEFF/, "") // Remove BOM
+      .trim()
+      .toUpperCase();
+  };
+
   const formattedRows = [];
   for (const row of rows) {
-    if (!row["Outlet"] && !row["Serial Number"]) continue;
+    let outletIdVal = "";
+    let outletVal = "";
+    let produkVal = "";
+    let snVal = "";
+    let kondisiVal = "";
+    let vendorVal = "";
+    let tglMulaiVal = "";
+    let tglSelesaiVal = "";
+    let masaSewaVal = "";
+    let statusVal = "";
+    let keteranganVal = "";
+    let tglCekVal = "";
 
-    // Pecah kolom "MASA SEWA" → tanggalMulai & tanggalSelesai
-    let tglMulai = null;
-    let tglSelesai = null;
-    const rawMasaSewa = row["MASA SEWA"]?.trim() || "";
-    if (rawMasaSewa.includes("-")) {
-      const [start, end] = rawMasaSewa.split("-").map((p) => p.trim());
-      tglMulai = parseIndoDateToISO(start);
-      tglSelesai = parseIndoDateToISO(end);
+    for (const key of Object.keys(row)) {
+      const normKey = normalizeKey(key);
+      if (normKey === "ID OUTLET" || normKey === "OUTLET ID") {
+        outletIdVal = row[key];
+      } else if (normKey === "OUTLET" || normKey === "NAMA OUTLET") {
+        outletVal = row[key];
+      } else if (normKey === "PRODUK / MODEL" || normKey === "PRODUK" || normKey === "PRODUCT HARDWARE" || normKey === "MODEL") {
+        produkVal = row[key];
+      } else if (normKey === "SERIAL NUMBER" || normKey === "SN" || normKey === "S/N") {
+        snVal = row[key];
+      } else if (normKey === "KONDISI") {
+        kondisiVal = row[key];
+      } else if (normKey === "VENDOR" || normKey === "PENYEDIA") {
+        vendorVal = row[key];
+      } else if (normKey === "TGL MULAI SEWA" || normKey === "TANGGAL MULAI" || normKey === "TANGGAL MULAI SEWA") {
+        tglMulaiVal = row[key];
+      } else if (normKey === "TGL SELESAI SEWA" || normKey === "TANGGAL SELESAI" || normKey === "TANGGAL SELESAI SEWA") {
+        tglSelesaiVal = row[key];
+      } else if (normKey === "MASA SEWA") {
+        masaSewaVal = row[key];
+      } else if (normKey === "STATUS") {
+        statusVal = row[key];
+      } else if (normKey === "KETERANGAN" || normKey === "DESKRIPSI" || normKey === "CATATAN") {
+        keteranganVal = row[key];
+      } else if (normKey === "TGL CEK" || normKey === "TANGGAL CEK") {
+        tglCekVal = row[key];
+      }
     }
 
-    // Gabungkan TGL CEK ke deskripsi jika ada isinya
-    let deskripsiFinal = row["DESKRIPSI"]?.trim() || "";
-    const tglCek = row["TGL CEK"]?.trim();
-    if (tglCek && tglCek !== "-") {
-      deskripsiFinal += deskripsiFinal
-        ? ` | Tgl Cek: ${tglCek}`
-        : `Tgl Cek: ${tglCek}`;
+    if (!snVal && !outletVal) continue;
+
+    // Resolve date mulai and selesai
+    let resolvedTglMulai = null;
+    let resolvedTglSelesai = null;
+
+    if (tglMulaiVal?.trim()) {
+      resolvedTglMulai = parseRobustDate(tglMulaiVal) || parseIndoDateToISO(tglMulaiVal);
+    }
+    if (tglSelesaiVal?.trim()) {
+      resolvedTglSelesai = parseRobustDate(tglSelesaiVal) || parseIndoDateToISO(tglSelesaiVal);
+    }
+
+    // Fallback to legacy "MASA SEWA" if individual dates aren't set
+    if (!resolvedTglMulai && !resolvedTglSelesai && masaSewaVal && masaSewaVal.includes("-")) {
+      const [start, end] = masaSewaVal.split("-").map((p) => p.trim());
+      resolvedTglMulai = parseIndoDateToISO(start);
+      resolvedTglSelesai = parseIndoDateToISO(end);
+    }
+
+    // Gabungkan TGL CEK ke keterangan jika ada isinya
+    let keteranganFinal = keteranganVal?.trim() || "";
+    if (tglCekVal && tglCekVal.trim() !== "-") {
+      keteranganFinal += keteranganFinal
+        ? ` | Tgl Cek: ${tglCekVal.trim()}`
+        : `Tgl Cek: ${tglCekVal.trim()}`;
     }
 
     formattedRows.push({
-      outlet_id: row["Outlet Id"]?.trim() ? Number(row["Outlet Id"]) : null,
-      outlet: row["Outlet"]?.trim() || "",
-      produk: row["Product Hardware"]?.trim() || "",
-      sn: row["Serial Number"]?.trim() || "",
-      tanggal_mulai: tglMulai,
-      tanggal_selesai: tglSelesai,
-      penyedia: row["PENYEDIA"]?.trim() || "",
-      status: row["STATUS"]?.trim() || "Inventaris",
-      kondisi: row["KONDISI"]?.trim() || "BAIK",
-      deskripsi: deskripsiFinal,
+      outlet_id: (outletIdVal?.trim() && !isNaN(Number(outletIdVal))) ? Number(outletIdVal) : null,
+      outlet: outletVal?.trim() || "",
+      produk: produkVal?.trim() || "",
+      sn: snVal?.trim() || "",
+      tanggal_mulai: resolvedTglMulai,
+      tanggal_selesai: resolvedTglSelesai,
+      vendor: vendorVal?.trim() || "",
+      status: statusVal?.trim() || "Inventaris",
+      kondisi: kondisiVal?.trim() || "BAIK",
+      keterangan: keteranganFinal,
     });
   }
 
@@ -78,25 +135,27 @@ export const importPrinterCSV = async (appId, rows) => {
   return formattedRows.length;
 };
 
+export const importPrinterExcel = importPrinterCSV;
+
 /**
- * Trigger download file CSV template import.
+ * Trigger download file Excel template import.
  */
 export const downloadTemplate = () => {
   const headers = [
-    "Outlet Id", "Outlet", "Product Hardware", "Serial Number",
-    "PENYEDIA", "MASA SEWA", "STATUS", "KONDISI", "DESKRIPSI", "TGL CEK",
+    "ID Outlet",
+    "Outlet",
+    "Produk / Model",
+    "Serial Number",
+    "Kondisi",
+    "Vendor",
+    "Tgl Mulai Sewa",
+    "Tgl Selesai Sewa",
+    "Status",
+    "Keterangan",
   ];
   const contoh = [
-    "12458,CP CIBINONG,EPSON L4260 ECO TANK,X8SS028432,POJ,April 2024 - April 2026,Sewa Berjalan,KURANG BAIK,Mikro,-",
-    "60830,UPS GALUH MAS,LQ-310 DOT MATRIX,R9JYJ33221,POJ,April 2024 - April 2026,Sewa Berjalan,BAIK,-,-",
+    ["12458", "CP CIBINONG", "EPSON L4260 ECO TANK", "X8SS028432", "BAIK", "POJ", "2024-04-01", "2026-04-01", "Sewa Berjalan", "-"],
+    ["60830", "UPS GALUH MAS", "LQ-310 DOT MATRIX", "R9JYJ33221", "BAIK", "POJ", "2024-04-01", "2026-04-01", "Sewa Berjalan", "-"],
   ];
-  const csv  = headers.join(",") + "\n" + contoh.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.setAttribute("download", "Template_Import_Printer.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadExcelTemplate("Template_Import_Printer.xlsx", headers, contoh, "Data Printer");
 };

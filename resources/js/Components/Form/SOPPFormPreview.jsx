@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, Printer, Plus, Trash2, ClipboardList } from "lucide-react";
+import VendorSelectDropdown from "./VendorSelectDropdown";
+import CustomSelectDropdown from "./CustomSelectDropdown";
 
-export default function SoppGenerator({ type, setView }) {
+export default function SoppGenerator({ type, setView, vendors = [] }) {
   const getTodayISO = () => new Date().toISOString().split("T")[0];
 
   // ---------------------------------------------------------------------
@@ -357,7 +359,7 @@ export default function SoppGenerator({ type, setView }) {
   const totalKredit = rows.reduce((sum, r) => sum + (parseFloat(r.kredit) || 0), 0);
 
   return (
-    <div className="max-w-7xl mx-auto mt-6 print:hidden">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 print:hidden">
       {/* Stylesheet scoped ke target print */}
       <style>{`
         @media print {
@@ -443,21 +445,29 @@ export default function SoppGenerator({ type, setView }) {
             </h3>
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1">Dibayarkan Kepada</label>
-              <input type="text" value={dibayarkanKepada} onChange={(e) => setDibayarkanKepada(e.target.value)} onFocus={() => scrollToPreviewField("pv-dibayarkan-kepada")} className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0f1712] border border-gray-200 dark:border-[#2b4533] rounded-lg outline-none text-gray-800 dark:text-[#f1f5f3] focus:border-emerald-500 font-bold" />
+              <VendorSelectDropdown
+                value={dibayarkanKepada}
+                onChange={(val) => setDibayarkanKepada(val)}
+                onSelect={(v) => setDibayarkanKepada(v.nama)}
+                onFocus={() => scrollToPreviewField("pv-dibayarkan-kepada")}
+                vendors={vendors}
+                placeholder="Pilih atau ketik vendor..."
+                inputCls="w-full pl-3.5 pr-9 py-2.5 text-xs bg-white dark:bg-[#0f1712] border border-[#1b7e47] dark:border-emerald-500 rounded-xl outline-none focus:outline-none focus:ring-2 focus:ring-[#1b7e47]/30 focus:border-[#1b7e47] text-gray-800 dark:text-[#f1f5f3] font-bold"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1">Jumlah (Nominal Rp)</label>
-                <input type="text" value={formatRibuan(getJumlahDisplay())} onChange={(e) => setJumlah(parseRibuan(e.target.value))} onFocus={() => scrollToPreviewField("pv-jumlah")} className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0f1712] border border-gray-200 dark:border-[#2b4533] rounded-lg outline-none text-gray-800 dark:text-[#f1f5f3] focus:border-emerald-500 font-bold" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1">Via Pembayaran</label>
-                <select value={via} onChange={(e) => setVia(e.target.value)} onFocus={() => scrollToPreviewField("pv-jumlah")} className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0f1712] border border-gray-200 dark:border-[#2b4533] rounded-lg outline-none text-gray-800 dark:text-[#f1f5f3] focus:border-emerald-500">
-                  <option value="Kas">Kas</option>
-                  <option value="Cek">Cek</option>
-                  <option value="BG">BG (Bilyet Giro)</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1">Via Pembayaran</label>
+              <CustomSelectDropdown
+                value={via}
+                onChange={(e) => setVia(e.target ? e.target.value : e)}
+                onFocus={() => scrollToPreviewField("pv-jumlah")}
+                options={[
+                  { label: "Kas", value: "Kas" },
+                  { label: "Cek", value: "Cek" },
+                  { label: "BG (Bilyet Giro)", value: "BG" }
+                ]}
+                placeholder="Pilih Via Pembayaran..."
+              />
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-gray-50 dark:border-[#213527] pt-3">
               <div>

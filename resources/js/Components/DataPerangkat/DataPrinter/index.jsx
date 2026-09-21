@@ -7,22 +7,32 @@ import {
   AlertCircle, FileSpreadsheet, Upload, Loader2,
 } from "lucide-react";
 
+import { router }            from "@inertiajs/react";
 import { usePrinterData }  from "../../../hooks/printer/usePrinterData";
 import PrinterTable        from "./PrinterTable";
 import PrinterModal        from "./PrinterModal";
 import QrLabelModal        from "./QrLabelModal";
 import ConfirmDeleteModal  from "../../Modal/ConfirmDeleteModal";
 import ToastNotif          from "../../Modal/ToastNotif";
+import PerpanjangSewaModal from "../../DataMaster/PerpanjangSewaModal";
 
-export default function DataPrinter({ userRole, printers, outlets, inventory, filterStatus: propFilterStatus, setFilterStatus: propSetFilterStatus }) {
+export default function DataPrinter({
+  userRole, printers, outlets, inventory, vendors = [],
+  filterStatus: propFilterStatus, setFilterStatus: propSetFilterStatus,
+  printerSearch, setPrinterSearch,
+  onNavigateToMasterBarang, setView,
+}) {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, name: "" });
+  const [perpanjangInv, setPerpanjangInv] = useState(null);
+  const [isPerpanjangOpen, setIsPerpanjangOpen] = useState(false);
+  const [isPerpanjangSaving, setIsPerpanjangSaving] = useState(false);
 
   const {
     downloadTemplate, fileInputRef, isSaving, handleFileUpload,
     openModalForAdd, koneksiError,
     searchQuery, handleSearch, filterStatus, handleFilterStatus, resetFilters,
     isLoading, paginatedData, filteredData,
-    currentPage, totalPages, startIndex, itemsPerPage, setCurrentPage,
+    currentPage, totalPages, startIndex, itemsPerPage, setItemsPerPage, setCurrentPage,
     openModalForEdit, handleDelete,
     setQrModalData, notif, setNotif,
     isModalOpen, setIsModalOpen,
@@ -30,7 +40,94 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
     outletsList, inventoryList, snList,
     handleSave, handleOutletChange, handleProdukChange, handleDateChange,
     qrModalData, exportToExcel,
-  } = usePrinterData(printers, outlets, inventory, propFilterStatus, propSetFilterStatus);
+  } = usePrinterData(printers, outlets, inventory, propFilterStatus, propSetFilterStatus, printerSearch, setPrinterSearch);
+
+  const showNotif = (message, type = "success") => {
+    setNotif({ show: true, message, type });
+    setTimeout(() => setNotif({ show: false, message: "", type: "" }), 3500);
+  };
+
+  const handleOpenPerpanjangModal = (printerItem, matchedInv) => {
+    let inv = matchedInv;
+    if (!inv && printerItem) {
+      inv = (inventoryList || []).find((i) => 
+        (printerItem.inventory_id && Number(i.id) === Number(printerItem.inventory_id)) ||
+        (printerItem.produk && i.nama && i.nama.trim().toLowerCase() === printerItem.produk.trim().toLowerCase())
+      );
+    }
+    if (!inv && printerItem) {
+      inv = {
+        id: null,
+        nama: printerItem.produk || "Printer",
+        jenis_barang: "Printer",
+        kuantitas: 1,
+        satuan: "Unit",
+        vendor_nama: printerItem.vendor || "",
+        tanggal_mulai: printerItem.tanggalMulai || printerItem.tanggal_mulai || "",
+        tanggal_selesai: printerItem.tanggalSelesai || printerItem.tanggal_selesai || "",
+        status: printerItem.status || "Sewa Berjalan",
+        biaya_sewa: 0,
+      };
+    }
+
+    if (inv) {
+      setPerpanjangInv(inv);
+      setIsPerpanjangOpen(true);
+    } else if (onNavigateToMasterBarang) {
+      onNavigateToMasterBarang(printerItem, matchedInv);
+    } else if (setView) {
+      setView("master_barang_non_meubelair");
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("open-perpanjang-barang", {
+            detail: {
+              id: matchedInv?.id || printerItem?.inventory_id,
+              nama: matchedInv?.nama || printerItem?.produk,
+            },
+          })
+        );
+      }, 100);
+    }
+  };
+
+  const handlePerpanjangSubmit = (payload) => {
+    if (!perpanjangInv) return;
+    setIsPerpanjangSaving(true);
+    
+    if (perpanjangInv.id) {
+      router.post(`/inventory/${perpanjangInv.id}`, { ...payload, _method: "PUT", mode_edit: "perpanjang" }, {
+        onSuccess: () => {
+          showNotif("Perpanjangan sewa berhasil disimpan dan disinkronkan ke seluruh printer terkait!");
+          setIsPerpanjangOpen(false);
+          setPerpanjangInv(null);
+        },
+        onError: (err) => {
+          console.error(err);
+          const errorMsg = typeof err === "object" ? Object.values(err).join("\n") : "Gagal memperpanjang sewa printer.";
+          showNotif(errorMsg, "error");
+        },
+        onFinish: () => {
+          setIsPerpanjangSaving(false);
+        },
+      });
+    } else {
+      router.post('/inventory', { ...payload, mode_edit: "perpanjang" }, {
+        onSuccess: () => {
+          showNotif("Perpanjangan sewa berhasil disimpan dan master barang dibuat!");
+          setIsPerpanjangOpen(false);
+          setPerpanjangInv(null);
+        },
+        onError: (err) => {
+          console.error(err);
+          const errorMsg = typeof err === "object" ? Object.values(err).join("\n") : "Gagal menyimpan perpanjangan sewa.";
+          showNotif(errorMsg, "error");
+        },
+        onFinish: () => {
+          setIsPerpanjangSaving(false);
+        },
+      });
+    }
+  };
 
   const askDelete = (id, nama) => setDeleteConfirm({ show: true, id, name: nama });
 
@@ -47,7 +144,7 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-              <Printer className="w-6 h-6 text-blue-600" /> Manajemen Data Printer
+              <Printer className="w-6 h-6 text-[#0d5c3a] dark:text-emerald-400" /> Manajemen Data Printer
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               Pantau status inventaris dan masa sewa perangkat printer
@@ -59,26 +156,25 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
               type="button"
               onClick={exportToExcel}
               disabled={filteredData.length === 0}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm"
+              className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] disabled:bg-[#279969]/50 text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-
-            {userRole === "admin" && (
+            {userRole !== "guest" && (
               <>
                 <button type="button" onClick={downloadTemplate}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm">
-                  <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                  className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer">
+                  <FileSpreadsheet className="w-4 h-4" /> Template Excel
                 </button>
 
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving}
                   className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm disabled:opacity-50">
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Import CSV
+                  Import Excel
                 </button>
 
-                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload}
-                  className="hidden" aria-label="Upload file CSV data printer" />
+                <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} onChange={handleFileUpload}
+                  className="hidden" aria-label="Upload file Excel data printer" />
               </>
             )}
           </div>
@@ -110,7 +206,7 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
                     value={searchQuery}
                     onChange={handleSearch}
                     aria-label="Cari data printer"
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-sm"
                   />
                 </div>
 
@@ -123,7 +219,7 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
                       setItemsPerPage(Number(e.target.value));
                       setCurrentPage(1);
                     }}
-                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                    className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-xs cursor-pointer font-medium shadow-sm"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -133,8 +229,8 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
                   <span>entries</span>
                 </div>
                 
-                {/* Reset Filters button if any filter active (except warning banner) */}
-                {((filterStatus !== "Semua" && filterStatus !== "warning") || searchQuery !== "") && (
+                {/* Reset Filters button if any filter active */}
+                {(filterStatus !== "Semua" || searchQuery !== "") && (
                   <button
                     type="button"
                     onClick={resetFilters}
@@ -150,12 +246,12 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
                   <button
                     type="button"
                     onClick={openModalForAdd}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition-colors text-xs shrink-0"
+                    className="flex items-center gap-2 bg-[#0d5c3a] hover:bg-[#0a462c] text-white px-5 py-2 rounded-full font-bold shadow-md shadow-[#0d5c3a]/20 transition-all text-xs shrink-0 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Printer
                   </button>
                 )}
-                <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+                <div className="bg-emerald-50 text-[#0d5c3a] dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 px-4 py-2 rounded-full text-xs font-bold shrink-0">
                   Total Printer: {filteredData.length}
                 </div>
               </div>
@@ -171,7 +267,7 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
                   value={filterStatus}
                   onChange={handleFilterStatus}
                   aria-label="Filter status dan kondisi"
-                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1b7e47] focus:border-[#1b7e47] text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
                 >
                   <option value="Semua">Semua Status & Kondisi</option>
                   {filterStatus === "warning" && (
@@ -190,54 +286,6 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
             </div>
           </div>
 
-          {filterStatus === "warning" && (
-            <div className="mx-6 mt-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
-              <span className="font-medium">Menampilkan kontrak sewa printer yang mendekati masa habis kontrak / Sewa Habis.</span>
-              <button 
-                onClick={() => handleFilterStatus({ target: { value: "Semua" } })} 
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
-              >
-                Hapus Filter
-              </button>
-            </div>
-          )}
-
-          {filterStatus === "Sewa Berjalan" && (
-            <div className="mx-6 mt-4 mb-4 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between text-sm text-green-800 animate-in fade-in duration-300">
-              <span className="font-medium">Menampilkan perangkat printer dengan status Sewa Berjalan.</span>
-              <button 
-                onClick={() => handleFilterStatus({ target: { value: "Semua" } })} 
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
-              >
-                Hapus Filter
-              </button>
-            </div>
-          )}
-
-          {filterStatus === "Sewa Habis" && (
-            <div className="mx-6 mt-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-sm text-red-800 animate-in fade-in duration-300">
-              <span className="font-medium">Menampilkan perangkat printer dengan status Sewa Habis.</span>
-              <button 
-                onClick={() => handleFilterStatus({ target: { value: "Semua" } })} 
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
-              >
-                Hapus Filter
-              </button>
-            </div>
-          )}
-
-          {filterStatus === "Inventaris" && (
-            <div className="mx-6 mt-4 mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-sm text-blue-800 animate-in fade-in duration-300">
-              <span className="font-medium">Menampilkan perangkat printer dengan status Inventaris (Gudang).</span>
-              <button 
-                onClick={() => handleFilterStatus({ target: { value: "Semua" } })} 
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all"
-              >
-                Hapus Filter
-              </button>
-            </div>
-          )}
-
           {/* Tabel */}
           <PrinterTable
             isLoading={isLoading}
@@ -252,9 +300,24 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
             onEdit={openModalForEdit}
             onDelete={(id, nama) => askDelete(id, nama)}
             onQr={setQrModalData}
+            inventoryList={inventoryList}
+            onNavigateToMasterBarang={handleOpenPerpanjangModal}
           />
         </div>
       </div>
+
+      {/* ── Modal Perpanjang Masa Sewa ── */}
+      <PerpanjangSewaModal
+        isOpen={isPerpanjangOpen}
+        item={perpanjangInv}
+        vendors={vendors}
+        isSaving={isPerpanjangSaving}
+        onClose={() => {
+          setIsPerpanjangOpen(false);
+          setPerpanjangInv(null);
+        }}
+        onSubmit={handlePerpanjangSubmit}
+      />
 
       {/* ── Modal Tambah / Edit ── */}
       <PrinterModal
@@ -266,6 +329,7 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
         outletsList={outletsList}
         inventoryList={inventoryList}
         snList={snList}
+        vendors={vendors}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
         onOutletChange={handleOutletChange}
@@ -284,6 +348,24 @@ export default function DataPrinter({ userRole, printers, outlets, inventory, fi
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm({ show: false, id: null, name: "" })}
       />
+
+      {/* ── Fullscreen Glassmorphic Loading Overlay ── */}
+      {isSaving && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white/95 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 max-w-sm mx-4 border border-slate-100 text-center animate-in zoom-in-95 duration-300">
+            <div className="relative flex items-center justify-center">
+              <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+              <div className="absolute w-12 h-12 rounded-full border-4 border-blue-100 animate-ping opacity-25" />
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-800 text-base">Sedang Memproses Data</h4>
+              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                Harap tunggu beberapa saat. Sistem sedang memproses dan memvalidasi data Anda...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast Notifikasi ── */}
       <ToastNotif

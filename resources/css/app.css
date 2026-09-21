@@ -22,6 +22,17 @@ body {
   --foreground: #f1f5f3;
 }
 
+/* Global Dark Green Focus Ring & Border (#1b7e47) for all form fields when clicked */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: #1b7e47 !important;
+  --tw-ring-color: #1b7e47 !important;
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) #1b7e47 !important;
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000) !important;
+}
+
 .dark body {
   background-color: #0f1712 !important;
   color: #f1f5f3 !important;
@@ -106,15 +117,6 @@ body {
   color: #d1dcd4 !important;
 }
 
-/* Custom scrollbars */
-.dark .custom-scrollbar::-webkit-scrollbar-track {
-  background: #0f1712 !important;
-}
-
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #2b4533 !important;
-}
-
 /* Toolbar & details panels background */
 .dark .bg-slate-50\/30,
 .dark .bg-gray-50\/50,
@@ -153,6 +155,10 @@ body {
   color: #48a359 !important;
 }
 
+.dark .border-blue-600 {
+  border-color: #48a359 !important;
+}
+
 .dark .bg-blue-50 {
   background-color: #1f3526 !important;
   color: #48a359 !important;
@@ -165,102 +171,151 @@ body {
 
 @keyframes alert-glow {
   0%, 100% {
-    box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 4px rgba(220, 38, 38, 0.2) !important;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.12), inset 0 0 4px rgba(220, 38, 38, 0.06) !important;
   }
   50% {
-    box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 0 8px rgba(239, 68, 68, 0.4) !important;
+    box-shadow: 0 0 18px rgba(220, 38, 38, 0.24), inset 0 0 8px rgba(220, 38, 38, 0.12) !important;
   }
 }
 
-/* Custom Alert/Warning Card & Table overrides (Maroon & Dark Red theme) */
+/* Custom Alert/Warning Card & Table overrides (Softer Dark Red theme) */
 .dark .alert-card {
-  background-color: #800000 !important;
-  border: 2px solid #dc2626 !important;
+  background-color: #3b1717 !important;
+  border: 1.5px solid #732a2a !important;
   animation: alert-glow 2s infinite ease-in-out !important;
-  color: #ffffff !important;
+  color: #fee2e2 !important;
 }
 
 .dark .alert-card-header {
-  border-color: #991b1b !important;
+  border-color: #551d1d !important;
 }
 
 /* Icon Container inside card header */
 .dark .alert-card .rounded-full {
-  background-color: #000000 !important;
+  background-color: rgba(0, 0, 0, 0.4) !important;
 }
 
 .dark .alert-card .rounded-full svg {
-  color: #ffffff !important;
+  color: #fca5a5 !important;
 }
 
 /* Title and description text color */
 .dark .alert-card h3 {
-  color: #ffffff !important;
+  color: #fee2e2 !important;
 }
 
 .dark .alert-card p {
   color: #fca5a5 !important;
 }
 
-/* Kelola Button */
-.dark .alert-card-header button,
-.dark .alert-card-header a {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+/* Kelola Button & Action links */
+.dark .alert-card button,
+.dark .alert-card a,
+.dark .alert-table button {
+  background-color: #6b2121 !important;
+  color: #fee2e2 !important;
+  border: 1px solid #8c2e2e !important;
 }
 
-.dark .alert-card-header button:hover,
-.dark .alert-card-header a:hover {
-  background-color: #1f1f1f !important;
+.dark .alert-card button:hover,
+.dark .alert-card a:hover,
+.dark .alert-table button:hover {
+  background-color: #8c2e2e !important;
   color: #ffffff !important;
-  border-color: #ffffff !important;
+  border-color: #b91c1c !important;
 }
 
 .dark .alert-card-footer {
-  background-color: #660000 !important;
-  border-color: #991b1b !important;
+  background-color: #2b1010 !important;
+  border-color: #4a1818 !important;
   color: #fca5a5 !important;
 }
 
 .dark .alert-card-footer:hover {
-  background-color: #7f0000 !important;
+  background-color: #3d1616 !important;
+  color: #fee2e2 !important;
 }
 
 .dark .alert-table {
-  border-color: #380d0d !important;
+  border-color: #4a1818 !important;
 }
 
 .dark .alert-table thead tr,
 .dark .alert-table thead th {
-  background-color: #fca5a5 !important;
-  color: #7f0000 !important;
-  border-color: #380d0d !important;
+  background-color: #4c1818 !important;
+  color: #fecaca !important;
+  border-color: #5d1f1f !important;
 }
 
 .dark .alert-table tbody tr {
-  background-color: #800000 !important;
+  background-color: #321313 !important;
 }
 
 .dark .alert-table tbody tr:nth-child(even) {
-  background-color: #800000 !important;
+  background-color: #2b1010 !important;
 }
 
 .dark .alert-table tbody tr:hover {
-  background-color: #990000 !important;
+  background-color: #421818 !important;
 }
 
 .dark .alert-table tbody td {
-  border-color: #380d0d !important;
+  border-color: #451717 !important;
 }
 
 /* Sisa Waktu Badge */
-.dark .alert-table td span,
 .dark .alert-table td .inline-flex {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background-color: #1e0b0b !important;
+  color: #fee2e2 !important;
+  border: 1px solid rgba(220, 38, 38, 0.35) !important;
 }
+
+.dark .alert-table td .inline-flex span,
+.dark .alert-table td span span {
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Status & Kondisi Badges in Dark Mode */
+.dark .status-badge,
+.dark .kondisi-badge {
+  display: inline-block !important;
+  width: 6rem !important; /* 96px (w-24) */
+  text-align: center !important;
+}
+
+.dark .status-badge-inventaris {
+  background-color: #1e3a5f !important;
+  color: #93c5fd !important;
+  border-color: #2563eb !important;
+}
+
+.dark .status-badge-sewa-berjalan {
+  background-color: #064e3b !important;
+  color: #6ee7b7 !important;
+  border-color: #059669 !important;
+}
+
+.dark .status-badge-sewa-habis {
+  background-color: #4c0519 !important;
+  color: #fda4af !important;
+  border-color: #e11d48 !important;
+}
+
+.dark .kondisi-badge-baik {
+  background-color: #064e3b !important;
+  color: #6ee7b7 !important;
+  border-color: #059669 !important;
+}
+
+.dark .kondisi-badge-rusak {
+  background-color: #7c2d12 !important;
+  color: #fdba74 !important;
+  border-color: #ea580c !important;
+}
+
 
 /* Prevent dark mode style overrides inside Handover print preview area */
 .dark #printable-area {
@@ -518,34 +573,117 @@ body {
   cursor: pointer;
 }
 
-/* Scrollbars in dark mode */
-.dark::-webkit-scrollbar,
+/* ==========================================================================
+   ELEGANT CUSTOM SCROLLBAR (LIGHT & DARK MODE)
+   ========================================================================== */
+
+/* Hapus tombol panah bawaan browser (arrow buttons) yang kaku */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Scrollbar Utama Webkit (Light Mode) */
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4) !important;
+  border-radius: 9999px !important;
+  border: 1px solid transparent !important;
+  background-clip: content-box !important;
+  transition: background-color 0.2s ease-in-out !important;
+}
+
+::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(16, 185, 129, 0.75) !important; /* Emerald green hover */
+}
+
+::-webkit-scrollbar-thumb:active,
+*::-webkit-scrollbar-thumb:active {
+  background-color: #059669 !important;
+}
+
+/* Standar Scrollbar Firefox (Light Mode) */
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
+/* Custom Scrollbar Dark Mode */
+.dark ::-webkit-scrollbar,
 .dark *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
 }
 
-.dark::-webkit-scrollbar-track,
+.dark ::-webkit-scrollbar-track,
 .dark *::-webkit-scrollbar-track {
-  background: #0f1712 !important;
+  background: transparent !important;
 }
 
-.dark::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb,
 .dark *::-webkit-scrollbar-thumb {
-  background-color: #2b4533 !important;
-  border-radius: 6px !important;
-  border: 2px solid #0f1712 !important;
+  background-color: rgba(43, 69, 51, 0.75) !important;
+  border-radius: 9999px !important;
+  border: 1px solid transparent !important;
+  background-clip: content-box !important;
+  transition: background-color 0.2s ease-in-out !important;
 }
 
-.dark::-webkit-scrollbar-thumb:hover,
+.dark ::-webkit-scrollbar-thumb:hover,
 .dark *::-webkit-scrollbar-thumb:hover {
-  background-color: #3e664c !important;
+  background-color: rgba(72, 163, 89, 0.9) !important; /* Emerald green forest highlight */
+}
+
+.dark ::-webkit-scrollbar-thumb:active,
+.dark *::-webkit-scrollbar-thumb:active {
+  background-color: #10b981 !important;
 }
 
 .dark,
 .dark * {
   scrollbar-width: thin;
-  scrollbar-color: #2b4533 #0f1712;
+  scrollbar-color: #2b4533 transparent !important;
+}
+
+/* Custom utility class .custom-scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.35) !important;
+  border-radius: 9999px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(16, 185, 129, 0.8) !important;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(43, 69, 51, 0.8) !important;
+  border-radius: 9999px !important;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(72, 163, 89, 0.9) !important;
 }
 
 /* Force dark-mode placeholder text to a consistent sage green/light gray color */

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Services\CaptchaService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -30,6 +31,17 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'captcha' => ['required', 'string'],
+        ];
+    }
+
+    /**
+     * Get custom attributes or messages for validator errors.
+     */
+    public function messages(): array
+    {
+        return [
+            'captcha.required' => 'Kode captcha wajib diisi.',
         ];
     }
 
@@ -42,8 +54,19 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
+        if (! CaptchaService::validate($this->input('captcha'))) {
+            CaptchaService::generate();
+
+            throw ValidationException::withMessages([
+                'captcha' => 'Kode captcha salah atau telah kedaluwarsa.',
+            ]);
+        }
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+
+            // Generate captcha baru setiap percobaan gagal
+            CaptchaService::generate();
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -51,6 +74,7 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+        session()->forget('login_captcha');
     }
 
     /**

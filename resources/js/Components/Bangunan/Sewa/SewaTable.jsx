@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Edit, Trash2, Calendar, User, DollarSign, Building } from "lucide-react";
+import { Edit, Trash2, Calendar, User, DollarSign, Building, Eye } from "lucide-react";
+import DetailHistoryModal from "@/Components/Common/DetailHistoryModal";
 
 export const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -11,6 +12,36 @@ export const formatDate = (dateString) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+export const formatPeriodeSewa = (val) => {
+  if (!val) return "-";
+  const str = String(val).trim();
+  if (!str) return "-";
+
+  // If it contains alphabetic text, return it but normalize common terms
+  if (/[a-zA-Z]/.test(str)) {
+    return str
+      .replace(/tahun/gi, "Thn")
+      .replace(/bulan/gi, "Bln")
+      .replace(/hari/gi, "Hari");
+  }
+
+  const num = parseFloat(str);
+  if (isNaN(num)) return str;
+
+  const years = Math.floor(num);
+  const fraction = num - years;
+  const months = Math.round(fraction * 12);
+
+  const result = [];
+  if (years > 0) result.push(`${years} Thn`);
+  if (months > 0) result.push(`${months} Bln`);
+  if (result.length === 0 && num > 0) {
+    const totalDays = Math.round(num * 365.25);
+    if (totalDays > 0) return `${totalDays} Hari`;
+  }
+  return result.join(" ") || "-";
 };
 
 export const hitungSisaWaktu = (tanggalSelesai) => {
@@ -24,10 +55,10 @@ export const hitungSisaWaktu = (tanggalSelesai) => {
     const diffTime = hariIni.getTime() - tglSelesai.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays <= 30) {
-      return `Habis ${diffDays} hari`;
+      return `> ${diffDays} hari`;
     } else {
       const diffMonths = (hariIni.getFullYear() - tglSelesai.getFullYear()) * 12 + (hariIni.getMonth() - tglSelesai.getMonth());
-      return `Habis ${diffMonths > 0 ? diffMonths : 0} bln`;
+      return `> ${diffMonths > 0 ? diffMonths : 0} bln`;
     }
   }
 
@@ -35,7 +66,7 @@ export const hitungSisaWaktu = (tanggalSelesai) => {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays <= 30) {
-    return `${diffDays} hari`;
+    return `< ${diffDays} hari`;
   } else {
     const diffMonths = (tglSelesai.getFullYear() - hariIni.getFullYear()) * 12 + (tglSelesai.getMonth() - hariIni.getMonth());
     return `${diffMonths > 0 ? diffMonths : 0} bln`;
@@ -77,10 +108,20 @@ export default function SewaTable({
 }) {
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+
+  React.useEffect(() => {
+    const handleReset = () => {
+      setSelectedId(null);
+      setHoveredId(null);
+    };
+    window.addEventListener("reset-all-filters", handleReset);
+    return () => window.removeEventListener("reset-all-filters", handleReset);
+  }, []);
 
   const formatHarga = (harga) => {
     if (!harga) return "—";
-    return `Rp ${Number(harga).toLocaleString("id-ID")}`;
+    return `Rp\u00A0${Number(harga).toLocaleString("id-ID")}`;
   };
 
   const getStatusBadge = (status) => {
@@ -123,44 +164,42 @@ export default function SewaTable({
 
   return (
     <div className="flex flex-col">
-      <div className={`overflow-x-auto custom-scrollbar ${itemsPerPage > 20 ? "max-h-[60vh] overflow-y-auto" : ""}`}>
-        <table className="w-full text-left border-collapse min-w-[2200px]">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-              <th className="p-2.5 w-12 text-center align-middle border border-blue-800 bg-blue-900">No</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kode Outlet</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Nama Outlet</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Type Outlet</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Type Bangunan</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Jenis STO</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Sisa Waktu</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Harga Sewa</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Status Gedung</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Periode Sewa</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Tgl. Kontrak Mulai</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Tgl. Kontrak Berakhir</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Keterangan</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Alamat</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kelurahan</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kecamatan</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Kab/Kota</th>
-              <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Provinsi</th>
-              {userRole === "admin" && (
-                <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">Aksi</th>
-              )}
+      <div className="overflow-x-auto custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[2200px] table-fixed">
+          <thead>
+            <tr className="bg-[#0d5c3a] text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+              <th className="p-2.5 w-[50px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">No</th>
+              <th className="p-2.5 w-[100px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Kode Outlet</th>
+              <th className="p-2.5 w-[200px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Nama Outlet</th>
+              <th className="p-2.5 w-[100px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Type Outlet</th>
+              <th className="p-2.5 w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Type Bangunan</th>
+              <th className="p-2.5 w-[90px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Jenis STO</th>
+              <th className="p-2.5 w-[80px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Sisa Waktu</th>
+              <th className="p-2.5 w-[150px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Status</th>
+              <th className="p-2.5 w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Harga Sewa</th>
+              <th className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Status Gedung</th>
+              <th className="p-2.5 w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Periode Sewa</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Tgl. Kontrak Mulai</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Tgl. Kontrak Berakhir</th>
+              <th className="p-2.5 w-[180px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Keterangan</th>
+              <th className="p-2.5 w-[220px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Alamat</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Kelurahan</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Kecamatan</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Kab/Kota</th>
+              <th className="p-2.5 w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Provinsi</th>
+              <th className="p-2.5 w-[100px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a]">Aksi</th>
             </tr>
           </thead>
           <tbody className="text-xs text-gray-800 bg-white">
             {isLoading ? (
               <tr>
-                <td colSpan={userRole === "admin" ? "20" : "19"} className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
+                <td colSpan="20" className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
                   Memuat data...
                 </td>
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={userRole === "admin" ? "20" : "19"} className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
+                <td colSpan="20" className="p-4 text-center text-gray-400 border border-slate-200 bg-white">
                   Tidak ada data sewa ditemukan.
                 </td>
               </tr>
@@ -195,7 +234,9 @@ export default function SewaTable({
                     className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                   >
                     <td className="p-2 border border-slate-200 text-center align-middle text-xs font-medium">{globalIndex}</td>
-                    <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">{item.kode_outlet || "-"}</td>
+                    <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">
+                      {item.kode_outlet && item.kode_outlet.startsWith("OT_") ? "-" : item.kode_outlet || "-"}
+                    </td>
                     <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">{item.nama_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_outlet || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.type_bangunan || "-"}</td>
@@ -215,6 +256,14 @@ export default function SewaTable({
                         const displayStatus = currentStatus === "Done" || currentStatus === "Selesai" 
                           ? "Selesai" 
                           : (currentStatus === "Expired" ? "Sewa Habis" : currentStatus);
+
+                        if (userRole === "guest") {
+                          return (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${getStatusBadge(currentStatus)}`} style={{ minWidth: '105px', textAlign: 'center' }}>
+                              {displayStatus}
+                            </span>
+                          );
+                        }
 
                         if (originalStatus === "Expired" || originalStatus === "Sewa Habis") {
                           return (
@@ -240,6 +289,21 @@ export default function SewaTable({
                               <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
                             </select>
                           );
+                        } else if (originalStatus === "Selesai") {
+                          const naturalStatus = getStatusInfo({ ...item, status: null });
+                          return (
+                            <select
+                              value={displayStatus}
+                              onChange={(e) => onStatusChange(item.id, e.target.value)}
+                              className={`text-center pl-2 pr-5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 ${getStatusBadge(currentStatus)}`}
+                              style={{ minWidth: '105px', textAlignLast: 'center' }}
+                            >
+                              <option value="Selesai" className="bg-white text-gray-800">Selesai</option>
+                              <option value={naturalStatus} className="bg-white text-gray-800">
+                                {naturalStatus === "Expired" || naturalStatus === "Sewa Habis" ? "Sewa Habis" : naturalStatus}
+                              </option>
+                            </select>
+                          );
                         } else {
                           return (
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${getStatusBadge(currentStatus)}`} style={{ minWidth: '105px', textAlign: 'center' }}>
@@ -249,10 +313,10 @@ export default function SewaTable({
                         }
                       })()}
                     </td>
-                    <td className="p-2 border border-slate-200 align-middle text-gray-900 font-medium">{formatHarga(item.harga_sewa)}</td>
+                    <td className="p-2 border border-slate-200 align-middle text-gray-900 font-medium whitespace-nowrap">{formatHarga(item.harga_sewa)}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.status_gedung || "-"}</td>
                     <td className="p-2 border border-slate-200 text-center align-middle text-gray-600">
-                      {item.periode_sewa ? (isNaN(item.periode_sewa) ? item.periode_sewa : parseFloat(item.periode_sewa)) : "-"}
+                      {formatPeriodeSewa(item.periode_sewa)}
                     </td>
                     <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_mulai || item.tanggal_kontrak_mulai)}</td>
                     <td className="p-2 border border-slate-200 align-middle text-xs text-gray-600">{formatDate(item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir)}</td>
@@ -262,8 +326,16 @@ export default function SewaTable({
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kecamatan || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.kab_kota || "-"}</td>
                     <td className="p-2 border border-slate-200 align-middle text-gray-600">{item.provinsi || "-"}</td>
-                    <td className="p-2 border border-slate-200 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
+                    <td className="p-2 border border-slate-200 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-center items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setDetailItem(item)}
+                          title="Detail & Riwayat Periode"
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
                         {userRole === "admin" && (
                           <>
                             <button
@@ -278,7 +350,7 @@ export default function SewaTable({
                               type="button"
                               onClick={() => onDelete(item.id, item.nama_outlet)}
                               title="Hapus Data"
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -331,6 +403,14 @@ export default function SewaTable({
           </div>
         </div>
       )}
+      {/* Detail & History Modal */}
+      <DetailHistoryModal
+        isOpen={!!detailItem}
+        onClose={() => setDetailItem(null)}
+        item={detailItem}
+        type="sewa"
+        onEditItem={onEdit}
+      />
     </div>
   );
 }

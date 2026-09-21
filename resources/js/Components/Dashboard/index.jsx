@@ -5,19 +5,25 @@ import React, { useState } from "react";
 import NotificationAlerts  from "./NotificationAlerts";
 import TransactionActivity from "./TransactionActivity";
 import ComputerStats       from "./ComputerStats";
+import LaptopStats         from "./LaptopStats";
 import PrinterStats        from "./PrinterStats";
-import InventoryChart      from "./InventoryChart";
+import MeubelairStats      from "./MeubelairStats";
 import BuildingDashboardView from "./BuildingDashboardView";
 import SecurityDashboardView from "./SecurityDashboardView";
 
 const DashboardView = ({
   transactions = [],
   setView,
+  activeTab,
   inventory = [],
   notifSewa = [],
   notifSewaKomputer = [],
+  notifSewaLaptop = [],
   printers = [],
   computers = [],
+  laptops = [],
+  meubelairs = [],
+  jenisMeubelairs = [],
   buildingLands = [],
   buildingSewas = [],
   buildingRenovations = [],
@@ -30,49 +36,52 @@ const DashboardView = ({
   setSecurityFilter,
   computerFilter,
   setComputerFilter,
+  laptopFilter,
+  setLaptopFilter,
   printerFilter,
   setPrinterFilter,
+  landSearch,
+  setLandSearch,
+  sewaSearch,
+  setSewaSearch,
+  printerSearch,
+  setPrinterSearch,
+  computerSearch,
+  setComputerSearch,
+  laptopSearch,
+  setLaptopSearch,
+  notificationCategoryFilter,
+  setNotificationCategoryFilter,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState("inventaris");
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (activeTab === "dashboard_bangunan") return "bangunan";
+    if (activeTab === "dashboard_pengamanan") return "pengamanan";
+    return "inventaris";
+  });
+
+  React.useEffect(() => {
+    if (activeTab === "dashboard_bangunan") setActiveSubTab("bangunan");
+    else if (activeTab === "dashboard_pengamanan") setActiveSubTab("pengamanan");
+    else if (activeTab === "dashboard_inventaris" || activeTab === "dashboard") setActiveSubTab("inventaris");
+  }, [activeTab]);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 animate-in fade-in duration-300">
-      
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Informasi</h1>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex gap-6 -mb-px">
-          <button 
-            onClick={() => setActiveSubTab("inventaris")} 
-            className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeSubTab === "inventaris" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-gray-500 hover:text-gray-700"}`}
-          >
-            Dashboard Inventaris
-          </button>
-          <button 
-            onClick={() => setActiveSubTab("bangunan")} 
-            className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeSubTab === "bangunan" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-gray-500 hover:text-gray-700"}`}
-          >
-            Dashboard Bangunan
-          </button>
-          <button 
-            onClick={() => setActiveSubTab("pengamanan")} 
-            className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeSubTab === "pengamanan" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-gray-500 hover:text-gray-700"}`}
-          >
-            Dashboard Pengamanan & Korporasi
-          </button>
-        </div>
-      </div>
-
       {activeSubTab === "inventaris" ? (
         <>
           {/* BLOK 1: NOTIFIKASI */}
           <NotificationAlerts
             notifSewa={notifSewa}
             notifSewaKomputer={notifSewaKomputer}
+            notifSewaLaptop={notifSewaLaptop}
             setView={setView}
             setPrinterFilter={setPrinterFilter}
             setComputerFilter={setComputerFilter}
+            setLaptopFilter={setLaptopFilter}
+            setPrinterSearch={setPrinterSearch}
+            setComputerSearch={setComputerSearch}
+            setLaptopSearch={setLaptopSearch}
+            setNotificationCategoryFilter={setNotificationCategoryFilter}
           />
 
           {/* BLOK 2: TRANSAKSI */}
@@ -81,11 +90,14 @@ const DashboardView = ({
           {/* BLOK 3: KOMPUTER */}
           <ComputerStats computers={computers} setView={setView} setComputerFilter={setComputerFilter} />
 
-          {/* BLOK 4: PRINTER */}
+          {/* BLOK 4: LAPTOP */}
+          <LaptopStats laptops={laptops} setView={setView} setLaptopFilter={setLaptopFilter} />
+
+          {/* BLOK 5: PRINTER */}
           <PrinterStats printers={printers} setView={setView} setPrinterFilter={setPrinterFilter} />
 
-          {/* BLOK 5: GRAFIK */}
-          <InventoryChart inventory={inventory} />
+          {/* BLOK 6: MEUBELAIR */}
+          <MeubelairStats meubelairs={meubelairs} jenisMeubelairs={jenisMeubelairs} setView={setView} />
         </>
       ) : activeSubTab === "bangunan" ? (
         <BuildingDashboardView
@@ -95,6 +107,9 @@ const DashboardView = ({
           setView={setView}
           setLandFilter={setLandFilter}
           setSewaFilter={setSewaFilter}
+          setLandSearch={setLandSearch}
+          setSewaSearch={setSewaSearch}
+          setNotificationCategoryFilter={setNotificationCategoryFilter}
         />
       ) : (
         <SecurityDashboardView

@@ -1,7 +1,7 @@
 // resources/js/Components/DataMaster/MasterOutlet.jsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -15,17 +15,21 @@ import {
   FileSpreadsheet,
   Upload,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  RotateCcw
 } from "lucide-react";
 import { router } from "@inertiajs/react";
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { importOutletCSV, downloadTemplate } from "../../services/outletService";
+import { parseExcelFile } from "../../utils/excelHelper";
 import OutletFormModal from "./OutletFormModal";
 import ToastNotif from "../Modal/ToastNotif";
 
-export default function MasterOutlet({ outlets, userRole }) {
+export default function MasterOutlet({ outlets, userRole = "user", outletAreas = [] }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterArea, setFilterArea] = useState("all");
+  const [filterCP, setFilterCP] = useState("all");
   const [localOutlets, setLocalOutlets] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({
@@ -49,41 +53,138 @@ export default function MasterOutlet({ outlets, userRole }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const handleFileUpload = (e) => {
+  const predefinedAreas = useMemo(() => [
+    "AREA SENEN",
+    "AREA KRAMAT JATI",
+    "AREA JATIWARINGIN",
+    "AREA BEKASI",
+    "AREA BOGOR"
+  ], []);
+
+  // Extract unique Area list
+  const uniqueAreas = useMemo(() => {
+    const set = new Set(predefinedAreas);
+    (outletAreas || []).forEach((a) => {
+      if (a.nama) set.add(String(a.nama).trim().toUpperCase());
+    });
+    (localOutlets || []).forEach((o) => {
+      if (o.area && String(o.area).trim()) {
+        set.add(String(o.area).trim().toUpperCase());
+      }
+    });
+    return Array.from(set).sort();
+  }, [localOutlets, predefinedAreas, outletAreas]);
+
+  // Extract unique CP (Cabang) list based on selected Area
+  const uniqueCPs = useMemo(() => {
+    const set = new Set();
+    (localOutlets || []).forEach((o) => {
+      const oArea = (o.area || "").trim().toUpperCase();
+      const oCabang = (o.cabang || "").trim();
+      if (!oCabang) return;
+
+      if (filterArea === "all" || oArea === filterArea.toUpperCase()) {
+        set.add(oCabang);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base" }));
+  }, [localOutlets, filterArea]);
+
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsSaving(true);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        try {
-          const total = await importOutletCSV("logistikku_app_01", data);
-          showLocalNotif(`Sukses! ${total} data instansi berhasil di-import.`, "success", () => {
-            router.reload({ only: ['outlets', 'activityLogs'] });
-          });
-        } catch (err) {
-          console.error(err);
-          const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan kolom header persis seperti template.";
-          showLocalNotif(errorMsg, "error");
-        } finally {
-          setIsSaving(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
+    try {
+      const data = await parseExcelFile(file);
+      const total = await importOutletCSV("logistikku_app_01", data);
+      showLocalNotif(`Sukses! ${total} data instansi berhasil di-import.`, "success", () => {
+        router.reload({ only: ['outlets', 'activityLogs'] });
+      });
+    } catch (err) {
+      console.error(err);
+      const errorMsg = err.response?.data?.message || err.message || "Gagal import! Pastikan file Excel valid dan kolom header sesuai template.";
+      showLocalNotif(errorMsg, "error");
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const filteredOutlets = useMemo(() => {
+    return localOutlets.filter((out) => {
+      const q = searchQuery.toLowerCase().trim();
+      const code = (out.code || "-").toLowerCase();
+      const nama = (out.nama || "").toLowerCase();
+      const area = (out.area || "").toLowerCase();
+      const cabang = (out.cabang || "").toLowerCase();
+      const typeOutlet = (out.type_outlet || "").toLowerCase();
+      const typeBangunan = (out.type_bangunan || "").toLowerCase();
+      const statusGedung = (out.status_gedung || "").toLowerCase();
+      const alamat = (out.alamat || "").toLowerCase();
+      const kelurahan = (out.kelurahan || "").toLowerCase();
+      const kecamatan = (out.kecamatan || "").toLowerCase();
+      const kabKota = (out.kab_kota || "").toLowerCase();
+      const provinsi = (out.provinsi || "").toLowerCase();
+
+      // Filter Area
+      if (filterArea !== "all") {
+        const outArea = (out.area || "").trim().toUpperCase();
+        if (outArea !== filterArea.toUpperCase()) {
+          return false;
         }
-      },
-      error: (err) => {
-        console.error(err);
-        showLocalNotif("Gagal membaca file CSV.", "error");
-        setIsSaving(false);
-      },
+      }
+
+      // Filter CP
+      if (filterCP !== "all") {
+        const outCabang = (out.cabang || "").trim().toUpperCase();
+        if (outCabang !== filterCP.toUpperCase()) {
+          return false;
+        }
+      }
+
+      if (!q) return true;
+
+      return (
+        nama.includes(q) ||
+        code.includes(q) ||
+        area.includes(q) ||
+        cabang.includes(q) ||
+        typeOutlet.includes(q) ||
+        typeBangunan.includes(q) ||
+        statusGedung.includes(q) ||
+        alamat.includes(q) ||
+        kelurahan.includes(q) ||
+        kecamatan.includes(q) ||
+        kabKota.includes(q) ||
+        provinsi.includes(q)
+      );
     });
+  }, [localOutlets, searchQuery, filterArea, filterCP]);
+
+  const isFiltered = filterArea !== "all" || filterCP !== "all" || searchQuery.trim() !== "";
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilterArea("all");
+    setFilterCP("all");
+    setCurrentPage(1);
   };
 
   const exportToExcel = () => {
     const rows = filteredOutlets.map((item, index) => ({
       "No": index + 1,
-      "Kode Outlet": item.code || "",
+      "Kode Outlet": item.code && item.code.startsWith("OT_") ? "-" : item.code || "",
       "Nama Outlet / Instansi": item.nama || "",
+      "Area": item.area || "",
+      "CP / Cabang": item.cabang || "",
+      "Tipe Outlet": item.type_outlet || "",
+      "Tipe Bangunan": item.type_bangunan || "",
+      "Status Gedung": item.status_gedung || "",
+      "Alamat": item.alamat || "",
+      "Kelurahan": item.kelurahan || "",
+      "Kecamatan": item.kecamatan || "",
+      "Kab/Kota": item.kab_kota || "",
+      "Provinsi": item.provinsi || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -103,13 +204,6 @@ export default function MasterOutlet({ outlets, userRole }) {
   const showLocalNotif = (message, type = "success", onOk = null) => {
     setNotif({ show: true, message, type, onOk });
   };
-
-  const filteredOutlets = localOutlets.filter((out) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      out.nama?.toLowerCase().includes(q) || out.code?.toLowerCase().includes(q)
-    );
-  });
 
   const openAdd = () => {
     setEditingOutlet(null);
@@ -150,6 +244,16 @@ export default function MasterOutlet({ outlets, userRole }) {
     const payload = {
       kode: codeVal,
       nama: namaVal,
+      area: form.get("area"),
+      cabang: form.get("cabang"),
+      type_outlet: form.get("type_outlet"),
+      type_bangunan: form.get("type_bangunan"),
+      status_gedung: form.get("status_gedung"),
+      alamat: form.get("alamat"),
+      kelurahan: form.get("kelurahan"),
+      kecamatan: form.get("kecamatan"),
+      kab_kota: form.get("kab_kota"),
+      provinsi: form.get("provinsi"),
     };
 
     if (editingOutlet) {
@@ -215,9 +319,11 @@ export default function MasterOutlet({ outlets, userRole }) {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
-            <MapPin className="w-6 h-6 text-blue-600" /> Master Data Instansi
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2.5">
+              <MapPin className="w-6 h-6 text-[#0d5c3a] dark:text-emerald-400" /> Master Data Instansi
+            </h2>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Kelola kode, nama, dan data instansi/outlet yang terdaftar.
           </p>
@@ -228,7 +334,7 @@ export default function MasterOutlet({ outlets, userRole }) {
             type="button"
             onClick={exportToExcel}
             disabled={filteredOutlets.length === 0}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+            className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] disabled:bg-[#279969]/50 text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" /> Export Excel
           </button>
@@ -237,9 +343,9 @@ export default function MasterOutlet({ outlets, userRole }) {
               <button
                 type="button"
                 onClick={downloadTemplate}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+                className="flex items-center gap-2 bg-[#279969] hover:bg-[#1e7a53] text-white px-5 py-2.5 rounded-full font-bold shadow-md shadow-[#279969]/30 transition-all text-xs cursor-pointer"
               >
-                <FileSpreadsheet className="w-4 h-4" /> Template CSV
+                <FileSpreadsheet className="w-4 h-4" /> Template Excel
               </button>
 
               <button
@@ -249,16 +355,16 @@ export default function MasterOutlet({ outlets, userRole }) {
                 className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Import CSV
+                Import Excel
               </button>
 
               <input
                 type="file"
-                accept=".csv"
+                accept=".xlsx, .xls, .csv"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
                 className="hidden"
-                aria-label="Upload file CSV data instansi"
+                aria-label="Upload file Excel data instansi"
               />
             </>
           )}
@@ -269,19 +375,19 @@ export default function MasterOutlet({ outlets, userRole }) {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Toolbar */}
         <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/30 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
               <div className="relative w-full sm:w-80">
                 <Search className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
                 <input
                   type="text"
-                  placeholder="Cari nama atau kode..."
+                  placeholder="Cari nama, kode, area, CP..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs shadow-sm"
                 />
               </div>
 
@@ -294,28 +400,104 @@ export default function MasterOutlet({ outlets, userRole }) {
                     setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs cursor-pointer font-medium shadow-sm"
+                  className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs cursor-pointer font-medium shadow-sm"
                 >
                   <option value={5}>5</option>
                   <option value={10}>10</option>
                   <option value={20}>20</option>
+                  <option value={50}>50</option>
                   <option value={10000}>All</option>
                 </select>
                 <span>entries</span>
               </div>
+
+              {/* Reset Filters button if any filter active */}
+              {isFiltered && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline shrink-0 self-start sm:self-auto cursor-pointer"
+                >
+                  Reset Filter
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
               {userRole === "admin" && (
                 <button
                   onClick={openAdd}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 shrink-0"
+                  className="bg-[#0d5c3a] hover:bg-[#0a462c] text-white px-5 py-2 rounded-full text-xs font-bold shadow-md shadow-[#0d5c3a]/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" /> Tambah Outlet
                 </button>
               )}
-              <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-semibold shrink-0">
+              <div className="bg-emerald-50 text-[#0d5c3a] dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 px-4 py-2 rounded-full text-xs font-bold shrink-0">
                 Total: {filteredOutlets.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Filter Area & Filter Cabang / CP */}
+          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100/50">
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wider uppercase mb-1.5">
+                AREA
+              </span>
+              <div className="relative w-48 sm:w-52">
+                <select
+                  value={filterArea}
+                  onChange={(e) => {
+                    setFilterArea(e.target.value);
+                    setFilterCP("all");
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Filter area"
+                  className="w-full pl-3 pr-8 py-2 bg-white dark:bg-[#1a2b20] text-gray-800 dark:text-white border border-gray-300 dark:border-[#2b4533] rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+                >
+                  <option value="all">Semua Area</option>
+                  {uniqueAreas.map((area) => (
+                    <option key={area} value={area}>
+                      {area}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wider uppercase mb-1.5">
+                CABANG / CP
+              </span>
+              <div className="relative w-52 sm:w-60">
+                <select
+                  value={filterCP}
+                  onChange={(e) => {
+                    setFilterCP(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Filter cabang / CP"
+                  className="w-full pl-3 pr-8 py-2 bg-white dark:bg-[#1a2b20] text-gray-800 dark:text-white border border-gray-300 dark:border-[#2b4533] rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-semibold cursor-pointer shadow-3xs appearance-none"
+                >
+                  <option value="all">
+                    {filterArea === "all" ? "Semua Cabang / CP" : `Semua CP (${filterArea})`}
+                  </option>
+                  {uniqueCPs.map((cp) => (
+                    <option key={cp} value={cp}>
+                      {cp}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -325,18 +507,42 @@ export default function MasterOutlet({ outlets, userRole }) {
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse border border-slate-200">
               <thead>
-                <tr className="bg-blue-900 text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-                  <th className="p-2.5 w-12 text-center align-middle border border-blue-800 bg-blue-900">
+                <tr className="bg-[#0d5c3a] text-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+                  <th className="p-2.5 w-12 text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
                     No
                   </th>
-                  <th className="p-2.5 w-40 text-left align-middle border border-blue-800 bg-blue-900">
+                  <th className="p-2.5 min-w-[110px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
                     Kode Outlet
                   </th>
-                  <th className="p-2.5 text-left align-middle border border-blue-800 bg-blue-900">
+                  <th className="p-2.5 min-w-[300px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
                     Nama Outlet / Instansi
                   </th>
+                  <th className="p-2.5 min-w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Tipe Outlet
+                  </th>
+                  <th className="p-2.5 min-w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Tipe Bangunan
+                  </th>
+                  <th className="p-2.5 min-w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Status Gedung
+                  </th>
+                  <th className="p-2.5 min-w-[220px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Alamat
+                  </th>
+                  <th className="p-2.5 min-w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Kelurahan
+                  </th>
+                  <th className="p-2.5 min-w-[120px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Kecamatan
+                  </th>
+                  <th className="p-2.5 min-w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Kab/Kota
+                  </th>
+                  <th className="p-2.5 min-w-[130px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
+                    Provinsi
+                  </th>
                   {userRole === "admin" && (
-                    <th className="p-2.5 text-center align-middle border border-blue-800 bg-blue-900">
+                    <th className="p-2.5 min-w-[80px] text-center align-middle border border-[#0a4228] bg-[#0d5c3a] whitespace-nowrap">
                       Aksi
                     </th>
                   )}
@@ -346,7 +552,7 @@ export default function MasterOutlet({ outlets, userRole }) {
                 {paginatedOutlets.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={userRole === "admin" ? "4" : "3"}
+                      colSpan={userRole === "admin" ? "12" : "11"}
                       className="p-4 text-center text-gray-400 border border-slate-200 bg-white"
                     >
                       Belum ada data instansi.
@@ -376,17 +582,41 @@ export default function MasterOutlet({ outlets, userRole }) {
                         onClick={() => setSelectedId((prev) => (prev === out.id ? null : out.id))}
                         className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
                       >
-                        <td className="p-2 border border-slate-200 text-center align-middle font-medium text-gray-500">
+                        <td className="p-2 border border-slate-200 text-center align-middle font-medium text-gray-500 whitespace-nowrap">
                           {globalIndex}
                         </td>
-                        <td className="p-2 border border-slate-200 align-middle font-mono text-xs text-gray-700">
-                          {out.code || "-"}
+                        <td className="p-2 border border-slate-200 align-middle font-mono text-xs text-gray-700 whitespace-nowrap">
+                          {out.code && out.code.startsWith("OT_") ? "-" : out.code || "-"}
                         </td>
-                        <td className="p-2 border border-slate-200 align-middle font-semibold text-gray-900">
+                        <td className="p-2 min-w-[300px] border border-slate-200 align-middle font-semibold text-gray-900 leading-snug">
                           {out.nama}
                         </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.type_outlet || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.type_bangunan || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.status_gedung || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 max-w-xs truncate" title={out.alamat}>
+                          {out.alamat || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.kelurahan || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.kecamatan || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.kab_kota || "-"}
+                        </td>
+                        <td className="p-2 border border-slate-200 align-middle text-gray-600 whitespace-nowrap">
+                          {out.provinsi || "-"}
+                        </td>
                         {userRole === "admin" && (
-                          <td className="p-2 border border-slate-200 text-center align-middle">
+                          <td className="p-2 border border-slate-200 text-center align-middle whitespace-nowrap">
                             <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => openEdit(out)}
@@ -458,6 +688,9 @@ export default function MasterOutlet({ outlets, userRole }) {
           editingOutlet={editingOutlet}
           onSubmit={onSubmit}
           isSaving={isSaving}
+          outlets={outlets}
+          userRole={userRole}
+          outletAreas={outletAreas}
         />
       )}
 

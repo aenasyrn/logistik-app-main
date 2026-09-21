@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Printer, Monitor, Map, Key, Clock, Check, Bell, ArrowRight, AlertTriangle, Loader2, CheckCircle } from "lucide-react";
+import { Printer, Monitor, Laptop, Map, Key, Clock, Check, Bell, ArrowRight, AlertTriangle, Loader2, CheckCircle, Eye } from "lucide-react";
 import { router } from "@inertiajs/react";
 import axios from "axios";
 
@@ -44,6 +44,10 @@ const formatDate = (dateStr) => {
 export default function NotificationPageView({
   printers = [],
   computers = [],
+  laptops = [],
+  notifSewa = [],
+  notifSewaKomputer = [],
+  notifSewaLaptop = [],
   buildingLands = [],
   buildingSewas = [],
   setView,
@@ -51,59 +55,129 @@ export default function NotificationPageView({
   setSewaFilter,
   setPrinterFilter,
   setComputerFilter,
+  setLaptopFilter,
+  setLandSearch,
+  setSewaSearch,
+  setPrinterSearch,
+  setComputerSearch,
+  setLaptopSearch,
+  notificationCategoryFilter = "all",
 }) {
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState(notificationCategoryFilter || "all");
   const [confirmItem, setConfirmItem] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [accessedItems, setAccessedItems] = useState(new Set());
+  const [activeAccessedId, setActiveAccessedId] = useState(null);
+
+  React.useEffect(() => {
+    if (notificationCategoryFilter) {
+      setActiveFilter(notificationCategoryFilter);
+    }
+  }, [notificationCategoryFilter]);
 
   // Compute Alerts
-  // 1. Sewa Printer
-  const alertPrinters = printers
-    .filter((p) => p.tanggalSelesai && p.status === "Sewa Berjalan")
-    .map((p) => {
-      const sisaBulan = hitungSisaBulan(p.tanggalSelesai);
-      const sisaHari = hitungSisaHari(p.tanggalSelesai);
-      return {
-        id: `printer-${p.id}`,
-        dbId: p.id,
-        type: "printer",
-        categoryName: "Sewa Printer",
-        title: p.produk || "Printer",
-        desc: `Sewa printer untuk instansi/outlet ${p.outlet || "Outlet"} (S/N: ${p.sn || "-"}) segera berakhir.`,
-        date: p.tanggalSelesai,
-        sisaBulan,
-        sisaHari,
-        targetView: "perangkat_printer",
-        extraInfo: p.penyedia ? `Penyedia: ${p.penyedia}` : "",
-      };
-    })
-    .filter((p) => p.sisaBulan !== null && p.sisaBulan <= 3);
+  // 1. Sewa Printer (Gunakan notifSewa jika ada, atau fallback kalkulasi non-inventaris <= 3 bulan)
+  const sourcePrinters = (notifSewa && notifSewa.length > 0)
+    ? notifSewa
+    : printers
+        .filter((p) => p.tanggalSelesai && p.status !== "Inventaris")
+        .map((p) => ({
+          ...p,
+          sisaBulan: hitungSisaBulan(p.tanggalSelesai),
+          sisaHari: hitungSisaHari(p.tanggalSelesai),
+        }))
+        .filter((p) => p.sisaBulan !== null && p.sisaBulan <= 3);
 
-  // 2. Sewa Komputer
-  const alertComputers = computers
-    .filter((c) => c.tanggalSelesai && c.status === "Sewa Berjalan")
-    .map((c) => {
-      const sisaBulan = hitungSisaBulan(c.tanggalSelesai);
-      const sisaHari = hitungSisaHari(c.tanggalSelesai);
-      return {
-        id: `computer-${c.id}`,
-        dbId: c.id,
-        type: "komputer",
-        categoryName: "Sewa Komputer",
-        title: c.produk || "Komputer",
-        desc: `Sewa komputer untuk instansi/outlet ${c.outlet || "Outlet"} (S/N: ${c.sn || "-"}) segera berakhir.`,
-        date: c.tanggalSelesai,
-        sisaBulan,
-        sisaHari,
-        targetView: "perangkat_komputer",
-        extraInfo: c.ipAddress ? `IP: ${c.ipAddress}` : "",
-      };
-    })
-    .filter((c) => c.sisaBulan !== null && c.sisaBulan <= 3);
+  const alertPrinters = sourcePrinters.map((p) => {
+    const sisaBulan = p.sisaBulan !== undefined ? p.sisaBulan : hitungSisaBulan(p.tanggalSelesai);
+    const sisaHari = p.sisaHari !== undefined ? p.sisaHari : hitungSisaHari(p.tanggalSelesai);
+    const isExpired = (sisaHari !== null && sisaHari < 0) || (sisaBulan !== null && sisaBulan < 0);
+    return {
+      id: `printer-${p.id}`,
+      dbId: p.id,
+      type: "printer",
+      categoryName: "Sewa Printer",
+      title: p.produk || "Printer",
+      desc: isExpired
+        ? `Masa sewa printer untuk instansi/outlet ${p.outlet || "Outlet"} (S/N: ${p.sn || "-"}) telah berakhir.`
+        : `Sewa printer untuk instansi/outlet ${p.outlet || "Outlet"} (S/N: ${p.sn || "-"}) segera berakhir.`,
+      date: p.tanggalSelesai,
+      sisaBulan,
+      sisaHari,
+      targetView: "perangkat_printer",
+      extraInfo: p.penyedia ? `Penyedia: ${p.penyedia}` : "",
+    };
+  });
 
-  // 3. Masa Berlaku SHGB Tanah
+  // 2. Sewa Komputer (Gunakan notifSewaKomputer jika ada, atau fallback kalkulasi non-inventaris <= 3 bulan)
+  const sourceComputers = (notifSewaKomputer && notifSewaKomputer.length > 0)
+    ? notifSewaKomputer
+    : computers
+        .filter((c) => c.tanggalSelesai && c.status !== "Inventaris")
+        .map((c) => ({
+          ...c,
+          sisaBulan: hitungSisaBulan(c.tanggalSelesai),
+          sisaHari: hitungSisaHari(c.tanggalSelesai),
+        }))
+        .filter((c) => c.sisaBulan !== null && c.sisaBulan <= 3);
+
+  const alertComputers = sourceComputers.map((c) => {
+    const sisaBulan = c.sisaBulan !== undefined ? c.sisaBulan : hitungSisaBulan(c.tanggalSelesai);
+    const sisaHari = c.sisaHari !== undefined ? c.sisaHari : hitungSisaHari(c.tanggalSelesai);
+    const isExpired = (sisaHari !== null && sisaHari < 0) || (sisaBulan !== null && sisaBulan < 0);
+    return {
+      id: `computer-${c.id}`,
+      dbId: c.id,
+      type: "komputer",
+      categoryName: "Sewa Komputer",
+      title: c.produk || "Komputer",
+      desc: isExpired
+        ? `Masa sewa komputer untuk instansi/outlet ${c.outlet || "Outlet"} (S/N: ${c.sn || "-"}) telah berakhir.`
+        : `Sewa komputer untuk instansi/outlet ${c.outlet || "Outlet"} (S/N: ${c.sn || "-"}) segera berakhir.`,
+      date: c.tanggalSelesai,
+      sisaBulan,
+      sisaHari,
+      targetView: "perangkat_komputer",
+      extraInfo: c.ipAddress ? `IP: ${c.ipAddress}` : "",
+    };
+  });
+
+  // 3. Sewa Laptop (Gunakan notifSewaLaptop jika ada, atau fallback kalkulasi non-inventaris <= 3 bulan)
+  const sourceLaptops = (notifSewaLaptop && notifSewaLaptop.length > 0)
+    ? notifSewaLaptop
+    : laptops
+        .filter((l) => l.tanggalSelesai && l.status !== "Inventaris")
+        .map((l) => ({
+          ...l,
+          sisaBulan: hitungSisaBulan(l.tanggalSelesai),
+          sisaHari: hitungSisaHari(l.tanggalSelesai),
+        }))
+        .filter((l) => l.sisaBulan !== null && l.sisaBulan <= 3);
+
+  const alertLaptops = sourceLaptops.map((l) => {
+    const sisaBulan = l.sisaBulan !== undefined ? l.sisaBulan : hitungSisaBulan(l.tanggalSelesai);
+    const sisaHari = l.sisaHari !== undefined ? l.sisaHari : hitungSisaHari(l.tanggalSelesai);
+    const isExpired = (sisaHari !== null && sisaHari < 0) || (sisaBulan !== null && sisaBulan < 0);
+    return {
+      id: `laptop-${l.id}`,
+      dbId: l.id,
+      type: "laptop",
+      categoryName: "Sewa Laptop",
+      title: l.produk || "Laptop",
+      desc: isExpired
+        ? `Masa sewa laptop untuk ${l.namaPengguna || l.nama_pengguna || "Pengguna"} (${l.departemen || "Departemen"} - S/N: ${l.sn || "-"}) telah berakhir.`
+        : `Sewa laptop untuk ${l.namaPengguna || l.nama_pengguna || "Pengguna"} (${l.departemen || "Departemen"} - S/N: ${l.sn || "-"}) segera berakhir.`,
+      date: l.tanggalSelesai,
+      sisaBulan,
+      sisaHari,
+      targetView: "perangkat_laptop",
+      extraInfo: l.sn ? `S/N: ${l.sn}` : (l.hostname ? `Host: ${l.hostname}` : ""),
+    };
+  });
+
+  // 4. Masa Berlaku SHGB Tanah
   const alertLands = buildingLands
     .filter((item) => item.tgl_berakhir_shgb && item.status !== "Done")
     .map((item) => {
@@ -114,7 +188,7 @@ export default function NotificationPageView({
         type: "tanah",
         categoryName: "SHGB Tanah",
         title: item.unit_kerja || "Aset Tanah",
-        desc: `Masa berlaku SHGB (${item.no_shgb || "-"}) untuk peruntukan ${item.peruntukan || "Lainnya"} segera berakhir.`,
+        desc: `Masa berlaku SHGB (${item.no_shgb ? item.no_shgb.replace(/\n/g, ' / ') : "-"}) untuk peruntukan ${item.peruntukan || "Lainnya"} segera berakhir.`,
         date: item.tgl_berakhir_shgb,
         sisaHari,
         targetView: "bangunan_tanah",
@@ -123,9 +197,9 @@ export default function NotificationPageView({
     })
     .filter((item) => item.sisaHari !== null && item.sisaHari <= 30);
 
-  // 4. Masa Kontrak Sewa Bangunan
+  // 5. Masa Kontrak Sewa Bangunan
   const alertSewas = buildingSewas
-    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done" && item.status !== "Selesai")
+    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done")
     .map((item) => {
       const tglAkhir = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
       const sisaHari = hitungSisaHari(tglAkhir);
@@ -145,7 +219,7 @@ export default function NotificationPageView({
     .filter((item) => item.sisaHari !== null && item.sisaHari <= 30);
 
   // Combine and sort by urgency (lowest sisaHari first, expired first)
-  const allAlerts = [...alertPrinters, ...alertComputers, ...alertLands, ...alertSewas].sort(
+  const allAlerts = [...alertPrinters, ...alertComputers, ...alertLaptops, ...alertLands, ...alertSewas].sort(
     (a, b) => {
       const dayA = a.sisaHari !== null ? a.sisaHari : (a.sisaBulan !== null ? a.sisaBulan * 30 : 9999);
       const dayB = b.sisaHari !== null ? b.sisaHari : (b.sisaBulan !== null ? b.sisaBulan * 30 : 9999);
@@ -192,14 +266,26 @@ export default function NotificationPageView({
   };
 
   const handleKelola = (item) => {
-    if (item.type === "printer" && setPrinterFilter) {
-      setPrinterFilter("warning");
-    } else if (item.type === "komputer" && setComputerFilter) {
-      setComputerFilter("warning");
-    } else if (item.type === "tanah" && setLandFilter) {
-      setLandFilter("expired");
-    } else if (item.type === "bangunan" && setSewaFilter) {
-      setSewaFilter("expired");
+    setAccessedItems((prev) => new Set(prev).add(item.id));
+    setActiveAccessedId(item.id);
+    if (item.type === "printer") {
+      if (setPrinterSearch) setPrinterSearch(item.desc?.match(/S\/N: (.*?)\)/)?.[1] || item.title || "");
+      if (setPrinterFilter) setPrinterFilter("Semua");
+    } else if (item.type === "komputer") {
+      const snOrIp = item.extraInfo?.replace("IP: ", "") || item.desc?.match(/S\/N: (.*?)\)/)?.[1] || item.title || "";
+      if (setComputerSearch) setComputerSearch(snOrIp);
+      if (setComputerFilter) setComputerFilter("Semua");
+    } else if (item.type === "laptop") {
+      const snOrTitle = item.extraInfo?.replace("S/N: ", "")?.replace("Host: ", "") || item.desc?.match(/S\/N: (.*?)\)/)?.[1] || item.title || "";
+      if (setLaptopSearch) setLaptopSearch(snOrTitle);
+      if (setLaptopFilter) setLaptopFilter("Semua");
+    } else if (item.type === "tanah") {
+      const shgbNo = item.desc?.match(/\((.*?)\)/)?.[1] || item.title || "";
+      if (setLandSearch) setLandSearch(shgbNo);
+      if (setLandFilter) setLandFilter("");
+    } else if (item.type === "bangunan") {
+      if (setSewaSearch) setSewaSearch(item.title || "");
+      if (setSewaFilter) setSewaFilter("");
     }
     setView(item.targetView);
   };
@@ -211,8 +297,10 @@ export default function NotificationPageView({
         return <Printer className="w-5 h-5 text-green-655 dark:text-emerald-400" />;
       case "komputer":
         return <Monitor className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />;
+      case "laptop":
+        return <Laptop className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
       case "tanah":
-        return <Map className="w-5 h-5 text-rose-650 dark:text-rose-400" />;
+        return <Map className="w-5 h-5 text-rose-655 dark:text-rose-400" />;
       case "bangunan":
         return <Key className="w-5 h-5 text-amber-650 dark:text-amber-400" />;
       default:
@@ -226,6 +314,8 @@ export default function NotificationPageView({
         return { bg: "bg-green-50 border-green-100 dark:bg-emerald-950/40 dark:border-emerald-900/50", label: "bg-green-100 text-green-800 dark:bg-emerald-950/60 dark:text-emerald-400" };
       case "komputer":
         return { bg: "bg-indigo-50 border-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-900/50", label: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-400" };
+      case "laptop":
+        return { bg: "bg-emerald-50 border-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-900/50", label: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400" };
       case "tanah":
         return { bg: "bg-rose-50 border-rose-100 dark:bg-rose-950/40 dark:border-rose-900/50", label: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400" };
       case "bangunan":
@@ -248,15 +338,22 @@ export default function NotificationPageView({
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Notifikasi Peringatan</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Notifikasi Peringatan</h1>
             {allAlerts.length > 0 && (
               <span className="inline-flex items-center px-3 py-1 text-xs font-bold bg-red-100 text-red-700 rounded-full animate-pulse">
                 {allAlerts.length} Aktif
               </span>
             )}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 rounded-full shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Halaman Sedang Diakses
+            </span>
           </div>
-          <p className="text-sm text-gray-500 font-medium mt-1">
+          <p className="text-sm text-gray-500 dark:text-slate-400 font-medium mt-1">
             Kontrak sewa dan masa berlaku dokumen penting yang akan berakhir
           </p>
         </div>
@@ -293,6 +390,16 @@ export default function NotificationPageView({
           }`}
         >
           Sewa Komputer ({alertComputers.length})
+        </button>
+        <button
+          onClick={() => setActiveFilter("laptop")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeFilter === "laptop"
+              ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/10"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-250"
+          }`}
+        >
+          Sewa Laptop ({alertLaptops.length})
         </button>
         <button
           onClick={() => setActiveFilter("tanah")}
@@ -333,16 +440,24 @@ export default function NotificationPageView({
             const isExpired = item.sisaHari !== null ? item.sisaHari < 0 : (item.sisaBulan !== null ? item.sisaBulan < 0 : false);
             const isUrgent = item.sisaHari !== null ? item.sisaHari <= 30 : (item.sisaBulan !== null ? item.sisaBulan <= 1 : false);
             const colors = getColors(item.type);
+            const isAccessed = accessedItems.has(item.id);
+            const isActiveItem = activeAccessedId === item.id;
 
             return (
               <div
                 key={item.id}
-                className={`bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-5 shadow-3xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5 transition-all relative border-l-4 ${
-                  isExpired
-                    ? "border-l-red-500 bg-red-50/5"
+                onClick={() => {
+                  setAccessedItems((prev) => new Set(prev).add(item.id));
+                  setActiveAccessedId(item.id);
+                }}
+                className={`bg-white border hover:border-slate-300 rounded-2xl p-5 shadow-3xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5 transition-all relative border-l-4 cursor-pointer ${
+                  isActiveItem
+                    ? "ring-2 ring-blue-500/40 border-blue-400 bg-blue-50/20"
+                    : isExpired
+                    ? "border-l-red-500 border-slate-200 bg-red-50/5"
                     : isUrgent
-                    ? "border-l-orange-500 bg-orange-50/5"
-                    : "border-l-slate-300"
+                    ? "border-l-orange-500 border-slate-200 bg-orange-50/5"
+                    : "border-l-slate-300 border-slate-200"
                 }`}
               >
                 {/* Left: Icon & Details */}
@@ -358,6 +473,12 @@ export default function NotificationPageView({
                       {isExpired && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
                           Expired
+                        </span>
+                      )}
+                      {isAccessed && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-700/60 shadow-2xs">
+                          <Eye className="w-3 h-3 text-blue-600 dark:text-blue-400 animate-pulse" />
+                          {isActiveItem ? "Sedang Diakses" : "Terakhir Diakses"}
                         </span>
                       )}
                     </div>
@@ -402,18 +523,11 @@ export default function NotificationPageView({
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-2.5 w-full md:w-auto justify-end border-t border-slate-100 md:border-0 pt-3 md:pt-0 shrink-0">
-                  {(item.type === "tanah" || item.type === "bangunan") && (
-                    <button
-                      onClick={() => handleMarkAsDoneClick(item)}
-                      className="px-3.5 py-2 border border-green-200 dark:border-emerald-800/80 hover:border-green-600 bg-green-50/50 dark:bg-emerald-950/40 hover:bg-green-600 dark:hover:bg-emerald-600 text-green-600 dark:text-emerald-450 hover:text-white dark:hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-3xs cursor-pointer"
-                      title="Tandai Selesai"
-                    >
-                      <Check className="w-4 h-4" />
-                      Tandai Selesai
-                    </button>
-                  )}
                   <button
-                    onClick={() => handleKelola(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleKelola(item);
+                    }}
                     className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
                   >
                     Kelola

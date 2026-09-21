@@ -10,6 +10,7 @@ class SoppHistory extends Model
 
     protected $fillable = [
         'nomor_sopp',
+        'nomor_spk',
         'tanggal',
         'tipe_sopp',
         'dibayarkan_kepada',

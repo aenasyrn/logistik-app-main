@@ -16,6 +16,7 @@ class TransactionItem extends Model
         'keterangan',
         'outlet_id',
         'outlet',
+        'vendor',
     ];
 
     public function transaction(): BelongsTo

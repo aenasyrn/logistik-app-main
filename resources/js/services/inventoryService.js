@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { router } from '@inertiajs/react';
 import { parseRobustDate } from "../utils/deviceUtils";
+import { downloadExcelTemplate } from '../utils/excelHelper';
 
 /**
  * Import massal dari array hasil parsing PapaParse.
@@ -28,6 +29,7 @@ export const importInventoryCSV = async (appId, rows) => {
     let masaSewaVal = "";
     let statusVal = "Inventaris";
     let deskripsiVal = "";
+    let biayaSewaVal = "0";
 
     for (const key of Object.keys(row)) {
       const normKey = normalizeKey(key);
@@ -53,6 +55,8 @@ export const importInventoryCSV = async (appId, rows) => {
         statusVal = row[key];
       } else if (normKey === "DESKRIPSI" || normKey === "KETERANGAN") {
         deskripsiVal = row[key];
+      } else if (normKey === "BIAYA SEWA" || normKey === "BIAYA") {
+        biayaSewaVal = row[key];
       }
     }
 
@@ -70,6 +74,7 @@ export const importInventoryCSV = async (appId, rows) => {
       masa_sewa_bulan: masaSewaVal?.trim() ? Number(masaSewaVal) : 0,
       status: statusVal?.trim() || "Inventaris",
       deskripsi: deskripsiVal?.trim() || "",
+      biaya_sewa: biayaSewaVal?.trim() ? Number(biayaSewaVal) : 0,
     });
   }
 
@@ -82,25 +87,19 @@ export const importInventoryCSV = async (appId, rows) => {
   return formattedRows.length;
 };
 
+export const importInventoryExcel = importInventoryCSV;
+
 /**
- * Trigger download file CSV template import.
+ * Trigger download file Excel template import.
  */
 export const downloadTemplate = () => {
   const headers = [
     "NAMA BARANG", "STOK", "SATUAN", "VENDOR", "NO SPK", "NO PKS",
-    "TGL MULAI", "TGL SELESAI", "MASA SEWA BULAN", "STATUS"
+    "TGL MULAI", "TGL SELESAI", "MASA SEWA BULAN", "STATUS", "BIAYA SEWA"
   ];
   const contoh = [
-    "Kursi Kerja,10,Pcs,Penyedia Makmur,SPK/123/2026,PKS/456/2026,16/07/2026,16/07/2028,24,Sewa Berjalan",
-    "Meja Kantor,5,Unit,-,-,-,-,-,0,Inventaris"
+    ["Kursi Kerja", 10, "Pcs", "Penyedia Makmur", "SPK/123/2026", "PKS/456/2026", "2026-07-16", "2028-07-16", 24, "Sewa Berjalan", 50000],
+    ["Meja Kantor", 5, "Unit", "-", "-", "-", "-", "-", 0, "Inventaris", 0]
   ];
-  const csv  = headers.join(",") + "\n" + contoh.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.setAttribute("download", "Template_Import_Barang.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadExcelTemplate("Template_Import_Barang.xlsx", headers, contoh, "Master Barang");
 };

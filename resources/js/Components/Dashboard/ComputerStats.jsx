@@ -27,33 +27,42 @@ export default function ComputerStats({ computers = [], setView, setComputerFilt
               if (setComputerFilter) setComputerFilter("Sewa Berjalan");
               setView("perangkat_komputer");
             }} 
-            className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 cursor-pointer hover:border-green-300 hover:shadow-md transition-all group"
+            className="bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/30 dark:from-[#132c21] dark:via-[#0f1712] dark:to-[#0f1712] p-5 rounded-2xl shadow-sm border border-emerald-200/80 dark:border-emerald-900/60 flex items-center gap-4 cursor-pointer hover:border-emerald-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
           >
-            <div className="bg-green-100 p-3 rounded-xl group-hover:bg-green-200 transition-colors"><CheckCircle className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-gray-500 font-medium">Sewa Berjalan</p><p className="text-xl font-bold text-gray-800">{computerStats.berjalan}</p></div>
+            <div className="bg-emerald-600 p-3 rounded-2xl text-white shadow-md shadow-emerald-500/30 group-hover:scale-110 transition-transform"><CheckCircle className="w-5 h-5" /></div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider">Sewa Berjalan</p>
+              <p className="text-2xl font-black text-gray-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors">{computerStats.berjalan}</p>
+            </div>
           </div>
           <div 
             onClick={() => {
               if (setComputerFilter) setComputerFilter("Sewa Habis");
               setView("perangkat_komputer");
             }} 
-            className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 cursor-pointer hover:border-red-300 hover:shadow-md transition-all group"
+            className="bg-gradient-to-br from-red-50/80 via-white to-red-50/30 dark:from-[#2e1518] dark:via-[#0f1712] dark:to-[#0f1712] p-5 rounded-2xl shadow-sm border border-red-200/80 dark:border-red-900/60 flex items-center gap-4 cursor-pointer hover:border-red-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
           >
-            <div className="bg-red-100 p-3 rounded-xl group-hover:bg-red-200 transition-colors"><AlertTriangle className="w-5 h-5 text-red-600" /></div>
-            <div><p className="text-xs text-gray-500 font-medium">Sewa Habis</p><p className="text-xl font-bold text-gray-800">{computerStats.habis}</p></div>
+            <div className="bg-red-600 p-3 rounded-2xl text-white shadow-md shadow-red-500/30 group-hover:scale-110 transition-transform"><AlertTriangle className="w-5 h-5" /></div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider">Sewa Habis</p>
+              <p className="text-2xl font-black text-gray-900 dark:text-slate-100 group-hover:text-red-600 transition-colors">{computerStats.habis}</p>
+            </div>
           </div>
           <div 
             onClick={() => {
               if (setComputerFilter) setComputerFilter("Inventaris");
               setView("perangkat_komputer");
             }} 
-            className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
+            className="bg-gradient-to-br from-blue-50/80 via-white to-blue-50/30 dark:from-[#13222e] dark:via-[#0f1712] dark:to-[#0f1712] p-5 rounded-2xl shadow-sm border border-blue-200/80 dark:border-blue-900/60 flex items-center gap-4 cursor-pointer hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
           >
-            <div className="bg-blue-100 p-3 rounded-xl group-hover:bg-blue-200 transition-colors"><Package className="w-5 h-5 text-blue-600" /></div>
-            <div><p className="text-xs text-gray-500 font-medium">Inventaris Gudang</p><p className="text-xl font-bold text-gray-800">{computerStats.inventaris}</p></div>
+            <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-md shadow-blue-500/30 group-hover:scale-110 transition-transform"><Package className="w-5 h-5" /></div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider">Inventaris Gudang</p>
+              <p className="text-2xl font-black text-gray-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors">{computerStats.inventaris}</p>
+            </div>
           </div>
         </div>
-        <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col">
+        <div className="lg:col-span-1 bg-white dark:bg-[#0f1712] rounded-2xl shadow-sm border border-gray-200 dark:border-[#2b4533] p-4 flex flex-col">
           <h4 className="text-xs font-bold text-gray-500 mb-2 border-b border-gray-100 pb-2">Rincian Model / Hardware</h4>
           <div className="overflow-y-auto custom-scrollbar flex-1 max-h-[88px] pr-1">
             {Object.keys(groupedComputers).length === 0 ? (

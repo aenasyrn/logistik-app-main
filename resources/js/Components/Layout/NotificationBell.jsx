@@ -31,52 +31,81 @@ const hitungSisaHari = (tanggalSelesai) => {
 export default function NotificationBell({
   printers = [],
   computers = [],
+  laptops = [],
+  notifSewa = null,
+  notifSewaKomputer = null,
+  notifSewaLaptop = null,
   buildingLands = [],
   buildingSewas = [],
   setView,
+  activeTab = "",
   isMobile = false,
 }) {
+  const isActive = activeTab === "notifikasi";
+
   // Compute Alerts Count
   // 1. Sewa Printer
-  const printerCount = printers
-    .filter((p) => p.tanggalSelesai && p.status === "Sewa Berjalan")
-    .map((p) => hitungSisaBulan(p.tanggalSelesai))
-    .filter((m) => m !== null && m <= 3).length;
+  const printerCount = notifSewa
+    ? notifSewa.length
+    : printers
+        .filter((p) => p.tanggalSelesai && p.status !== "Inventaris")
+        .map((p) => hitungSisaBulan(p.tanggalSelesai))
+        .filter((m) => m !== null && m <= 3).length;
 
   // 2. Sewa Komputer
-  const computerCount = computers
-    .filter((c) => c.tanggalSelesai && c.status === "Sewa Berjalan")
-    .map((c) => hitungSisaBulan(c.tanggalSelesai))
-    .filter((m) => m !== null && m <= 3).length;
+  const computerCount = notifSewaKomputer
+    ? notifSewaKomputer.length
+    : computers
+        .filter((c) => c.tanggalSelesai && c.status !== "Inventaris")
+        .map((c) => hitungSisaBulan(c.tanggalSelesai))
+        .filter((m) => m !== null && m <= 3).length;
 
-  // 3. Masa Berlaku SHGB Tanah
+  // 3. Sewa Laptop
+  const laptopCount = notifSewaLaptop
+    ? notifSewaLaptop.length
+    : laptops
+        .filter((l) => l.tanggalSelesai && l.status !== "Inventaris")
+        .map((l) => hitungSisaBulan(l.tanggalSelesai))
+        .filter((m) => m !== null && m <= 3).length;
+
+  // 4. Masa Berlaku SHGB Tanah
   const landCount = buildingLands
     .filter((item) => item.tgl_berakhir_shgb && item.status !== "Done")
     .map((item) => hitungSisaHari(item.tgl_berakhir_shgb))
     .filter((d) => d !== null && d <= 30).length;
 
-  // 4. Masa Kontrak Sewa Bangunan
+  // 5. Masa Kontrak Sewa Bangunan
   const sewaCount = buildingSewas
-    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done" && item.status !== "Selesai")
+    .filter((item) => (item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir) && item.status !== "Done")
     .map((item) => {
       const tglAkhir = item.tgl_kontrak_berakhir || item.tanggal_kontrak_berakhir;
       return hitungSisaHari(tglAkhir);
     })
     .filter((d) => d !== null && d <= 30).length;
 
-  const totalCount = printerCount + computerCount + landCount + sewaCount;
+  const totalCount = printerCount + computerCount + laptopCount + landCount + sewaCount;
 
   return (
     <div className="relative">
       <button
         onClick={() => setView("notifikasi")}
-        className="relative p-2 text-gray-500 hover:bg-slate-50 hover:text-blue-600 rounded-xl transition-all border border-transparent hover:border-slate-100 flex items-center justify-center cursor-pointer"
-        title="Notifikasi Peringatan"
+        className={`relative p-2 rounded-xl transition-all border flex items-center justify-center cursor-pointer ${
+          isActive
+            ? "bg-emerald-100/80 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700/60 ring-2 ring-emerald-500/40 shadow-sm"
+            : "text-gray-500 hover:bg-slate-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-[#1e3125] dark:hover:text-white border-slate-200/0 hover:border-slate-100 dark:hover:border-[#2b4533]"
+        }`}
+        title={isActive ? "Notifikasi (Sedang Diakses)" : "Notifikasi Peringatan"}
       >
         <Bell className={isMobile ? "w-6 h-6" : "w-5 h-5"} />
         {totalCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse">
+          <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-red-500 text-[9px] font-extrabold text-white shadow-sm animate-pulse leading-none">
             {totalCount}
+          </span>
+        )}
+        {isActive && (
+          <span className="absolute -bottom-1 -left-1 flex h-3 w-3 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
         )}
       </button>

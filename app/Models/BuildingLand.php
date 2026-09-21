@@ -3,11 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class BuildingLand extends Model
 {
     protected $table = 'aset_tanah';
     protected $guarded = [];
+
+    public function histories(): MorphMany
+    {
+        return $this->morphMany(ContractHistory::class, 'contractable')->orderBy('id', 'desc');
+    }
 
     protected $appends = [
         'no_sertifikat_gabungan',
@@ -35,7 +41,37 @@ class BuildingLand extends Model
                 $model->no = (static::max('no') ?? 0) + 1;
             }
         });
+
+        static::saving(function ($model) {
+            if (empty($model->outlet_id) && !empty($model->unit_kerja)) {
+                $unitKerja = trim($model->unit_kerja);
+                $outlet = \App\Models\Outlet::firstOrCreate(
+                    ['nama' => $unitKerja],
+                    [
+                        'code' => 'OT_' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $unitKerja), 0, 8)),
+                        'alamat' => $model->alamat ?? null,
+                    ]
+                );
+                $model->outlet_id = $outlet->id;
+            }
+
+            if (!empty($model->outlet_id)) {
+                $outlet = \App\Models\Outlet::find($model->outlet_id);
+                if ($outlet) {
+                    if ((empty($outlet->alamat) || $outlet->alamat === '-') && !empty($model->alamat) && $model->alamat !== '-') {
+                        $outlet->alamat = $model->alamat;
+                        $outlet->save();
+                    }
+                }
+            }
+        });
     }
+
+    public function outlet()
+    {
+        return $this->belongsTo(Outlet::class, 'outlet_id');
+    }
+
 
     // Map no_sertifikat_gabungan to no_sertifikat_gabung
     public function getNoSertifikatGabunganAttribute()
