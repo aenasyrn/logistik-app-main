@@ -1,4 +1,3 @@
-"use client";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { usePage } from "@inertiajs/react";

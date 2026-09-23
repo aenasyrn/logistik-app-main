@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterBarang.jsx
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import {
   Database, Plus, Box, Hash, Scale, Building2,
@@ -99,7 +97,7 @@ export default function MasterBarang({
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importInventoryCSV("logistikku_app_01", data);
+      const total = await importInventoryCSV(data);
       showNotif(`Sukses! ${total} data barang berhasil di-import.`, "success");
     } catch (err) {
       console.error(err);

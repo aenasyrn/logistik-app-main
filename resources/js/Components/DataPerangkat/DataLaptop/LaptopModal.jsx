@@ -1,6 +1,4 @@
 // resources/js/Components/DataPerangkat/DataLaptop/LaptopModal.jsx
-"use client";
-
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Laptop, User, Box, Sparkles } from "lucide-react";
 import { calculateAutoStatus } from "../../../utils/deviceUtils";

@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/PerpanjangSewaModal.jsx
-"use client";
-
 import { useState, useEffect } from "react";
 import { X, CalendarPlus, Clock, History, AlertCircle, Sparkles, Loader2, FileText, CheckCircle2 } from "lucide-react";
 import VendorSelectDropdown from "../Form/VendorSelectDropdown";

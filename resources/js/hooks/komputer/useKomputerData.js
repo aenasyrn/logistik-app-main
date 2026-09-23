@@ -1,6 +1,4 @@
 // resources/js/hooks/komputer/useKomputerData.js
-"use client";
-
 import { useState, useEffect } from "react";
 import { calculateAutoStatus } from "../../utils/deviceUtils";
 import { useKomputerCRUD }   from "./useKomputerCRUD";

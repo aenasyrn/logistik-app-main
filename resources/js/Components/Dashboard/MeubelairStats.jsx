@@ -1,6 +1,4 @@
 // resources/js/Components/Dashboard/MeubelairStats.jsx
-"use client";
-
 import React, { useState, useMemo } from "react";
 import { Armchair, MapPin, Package, ChevronDown, Filter } from "lucide-react";
 

@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/SaranaPengamanan/index.jsx
-"use client";
-
 import React, { useState, useRef, useEffect } from "react";
 import { Shield, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, FileText, Upload } from "lucide-react";
 import axios from "axios";
@@ -591,7 +589,7 @@ export default function SaranaPengamanan({ userRole, facilities = [], outlets = 
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importSecurityCSV("logistikku_app_01", data);
+      const total = await importSecurityCSV(data);
       showNotif(`Sukses! ${total} data pengamanan & korporasi berhasil di-import.`, "success", () => {
         router.reload({ only: ['securityFacilities', 'activityLogs'] });
       });

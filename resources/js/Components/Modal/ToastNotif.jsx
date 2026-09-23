@@ -1,6 +1,4 @@
 // src/components/modal/ToastNotif.jsx
-"use client";
-
 import { CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 
 /**

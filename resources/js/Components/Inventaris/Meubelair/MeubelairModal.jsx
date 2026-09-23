@@ -1,6 +1,4 @@
 // resources/js/Components/Inventaris/Meubelair/MeubelairModal.jsx
-"use client";
-
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, MapPin, Hash, CheckCircle, Info, Building2 } from "lucide-react";
 import CustomSelectDropdown from "../../Form/CustomSelectDropdown";

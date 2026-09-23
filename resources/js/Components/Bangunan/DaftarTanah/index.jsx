@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/DaftarTanah/index.jsx
-"use client";
-
 import React, { useState, useRef } from "react";
 import { Map, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Upload, Eye, MapPin, FileText } from "lucide-react";
 import DetailHistoryModal from "../../Common/DetailHistoryModal";
@@ -768,7 +766,7 @@ export default function DaftarTanah({ userRole, lands = [], outlets = [], landFi
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importLandCSV("logistikku_app_01", data);
+      const total = await importLandCSV(data);
       showNotif(`Sukses! ${total} data tanah berhasil di-import.`, "success", () => {
         router.reload({ only: ['buildingLands'] });
       });

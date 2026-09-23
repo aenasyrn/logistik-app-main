@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterMeubelairView.jsx
-"use client";
-
 import { useState, useMemo, useRef } from "react";
 import {
   Plus, Search, FileSpreadsheet, Upload, Loader2,

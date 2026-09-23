@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
-export const importVendorCSV = async (appId, data) => {
+export const importVendorCSV = async (data) => {
   const res = await axios.post('/vendors/import', { data });
   return typeof res.data?.total === 'number' ? res.data.total : data.length;
 };

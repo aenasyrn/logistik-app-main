@@ -1,4 +1,3 @@
-"use client";
 import { useState } from "react";
 import { ArrowLeft, Save, Printer } from "lucide-react";
 import WeekendWarningModal from "../Common/WeekendWarningModal";

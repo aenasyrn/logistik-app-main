@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/KelolaAreaCabangModal.jsx
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, MapPin, Building2, Loader2, AlertCircle, ChevronDown } from "lucide-react";
 import {

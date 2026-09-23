@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterVendorPlaceholder.jsx
-"use client";
-
 import { Users, Hammer, ArrowLeftRight, HardHat } from "lucide-react";
 
 export default function MasterVendorPlaceholder() {

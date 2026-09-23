@@ -1,6 +1,4 @@
 // src/components/Dashboard/index.jsx
-"use client";
-
 import React, { useState } from "react";
 import NotificationAlerts  from "./NotificationAlerts";
 import TransactionActivity from "./TransactionActivity";

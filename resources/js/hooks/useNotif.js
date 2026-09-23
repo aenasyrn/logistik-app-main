@@ -1,6 +1,5 @@
 // src/hooks/useNotif.js
 // Toast notifikasi global
-"use client";
 
 import { useState } from "react";
 

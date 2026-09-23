@@ -1,7 +1,5 @@
 // resources/js/hooks/useTransaksi.js
 // Form surat, generate nomor, log aktivitas, save + update stok
-"use client";
-
 import { useState } from "react";
 import axios from 'axios';
 import { router } from '@inertiajs/react';
@@ -15,7 +13,6 @@ import { createInitialFormData, createInitialItem } from "../constants";
  */
 export function useTransaksi({
   user,
-  appId,
   transactions,
   inventory,
   setTransactions,

@@ -1,6 +1,4 @@
 // src/components/Layout/AppHeader.jsx
-"use client";
-
 import UserBadge from "./UserBadge";
 import NotificationBell from "./NotificationBell";
 import { Sun, Moon } from "lucide-react";

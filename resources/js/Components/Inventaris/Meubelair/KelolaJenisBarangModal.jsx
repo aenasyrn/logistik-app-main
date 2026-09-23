@@ -1,6 +1,4 @@
 // resources/js/Components/Inventaris/Meubelair/KelolaJenisBarangModal.jsx
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, Tag, Loader2, AlertCircle } from "lucide-react";
 import { addJenisMeubelair, deleteJenisMeubelair } from "../../../services/meubelairService";

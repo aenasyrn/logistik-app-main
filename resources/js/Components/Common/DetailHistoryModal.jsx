@@ -1,6 +1,4 @@
 // resources/js/Components/Common/DetailHistoryModal.jsx
-"use client";
-
 import { X, Calendar, History, Clock, Building2, CalendarPlus, ExternalLink, Box, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function DetailHistoryModal({

@@ -1,4 +1,3 @@
-"use client";
 import { BarChart3, Package } from "lucide-react";
 
 export default function InventoryChart({ inventory = [] }) {

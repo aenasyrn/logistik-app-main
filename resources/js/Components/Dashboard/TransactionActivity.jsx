@@ -1,4 +1,3 @@
-"use client";
 import { History, Plus, ArrowLeft, Activity, Layers } from "lucide-react";
 
 export default function TransactionActivity({ transactions = [], setView }) {

@@ -6,7 +6,7 @@ import { downloadExcelTemplate } from '../utils/excelHelper';
 /**
  * Import massal dari array hasil parsing PapaParse.
  */
-export const importInventoryCSV = async (appId, rows) => {
+export const importInventoryCSV = async (rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
   const normalizeKey = (key) => {

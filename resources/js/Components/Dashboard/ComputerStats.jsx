@@ -1,4 +1,3 @@
-"use client";
 import { Monitor, CheckCircle, AlertTriangle, Package } from "lucide-react";
 
 export default function ComputerStats({ computers = [], setView, setComputerFilter }) {

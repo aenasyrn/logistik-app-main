@@ -1,6 +1,4 @@
 // resources/js/Components/DataPerangkat/DataLaptop/index.jsx
-"use client";
-
 import React, { useState, useMemo, useRef } from "react";
 import {
   Laptop, Search, Plus,

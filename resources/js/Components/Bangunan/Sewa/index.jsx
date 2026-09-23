@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/Sewa/index.jsx
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
 import { Key, Search, Plus, FileSpreadsheet, X, Upload, Loader2 } from "lucide-react";
 import axios from "axios";
@@ -516,7 +514,7 @@ export default function SewaIndex({ userRole, sewas = [], outlets = [], sewaFilt
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importSewaCSV("logistikku_app_01", data);
+      const total = await importSewaCSV(data);
       showNotif(`Sukses! ${total} data sewa berhasil di-import.`, "success", () => {
         router.reload({ only: ['buildingSewas', 'activityLogs', 'outlets'] });
       });

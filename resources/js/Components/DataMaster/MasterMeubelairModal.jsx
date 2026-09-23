@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterMeubelairModal.jsx
-"use client";
-
 import { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Plus, Package, ChevronDown, Settings } from "lucide-react";
 import CustomSelectDropdown from "../Form/CustomSelectDropdown";

@@ -7,7 +7,7 @@ import { downloadExcelTemplate } from '../utils/excelHelper';
 /**
  * Tambah satu data printer.
  */
-export const addPrinter = async (appId, formData) => {
+export const addPrinter = async (formData) => {
   const response = await axios.post('/printers', formData);
   router.reload({ only: ['printers', 'activityLogs', 'outlets'] });
   return response.data;
@@ -16,7 +16,7 @@ export const addPrinter = async (appId, formData) => {
 /**
  * Perbarui data printer berdasarkan id.
  */
-export const updatePrinter = async (appId, id, formData) => {
+export const updatePrinter = async (id, formData) => {
   const response = await axios.put(`/printers/${id}`, formData);
   router.reload({ only: ['printers', 'activityLogs', 'outlets'] });
   return response.data;
@@ -25,7 +25,7 @@ export const updatePrinter = async (appId, id, formData) => {
 /**
  * Hapus data printer berdasarkan id.
  */
-export const deletePrinter = async (appId, id) => {
+export const deletePrinter = async (id) => {
   const response = await axios.delete(`/printers/${id}`);
   router.reload({ only: ['printers', 'activityLogs'] });
   return response.data;
@@ -34,7 +34,7 @@ export const deletePrinter = async (appId, id) => {
 /**
  * Import massal dari array hasil parsing PapaParse.
  */
-export const importPrinterCSV = async (appId, rows) => {
+export const importPrinterCSV = async (rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
   const normalizeKey = (key) => {

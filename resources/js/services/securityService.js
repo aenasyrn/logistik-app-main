@@ -3,7 +3,7 @@ import axios from 'axios';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
-export const importSecurityCSV = async (appId, rows) => {
+export const importSecurityCSV = async (rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
   const formattedRows = [];

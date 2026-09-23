@@ -112,8 +112,6 @@ export default function App(props) {
   // Admin tidak dibatasi idle timeout 20 menit; user non-admin dimonitor jika idle 20 menit
   useIdleTimeout(20, userRole !== "admin");
 
-  const appId = "logistikku_app_01";
-
   // State management populated from Laravel props
   const [inventory, setInventory] = useState(props.inventory || []);
   const [outlets, setOutlets] = useState(props.outlets || []);
@@ -312,7 +310,7 @@ export default function App(props) {
     handleInputChange, handleItemChange, handleSaveTransaction,
     isSaving,
   } = useTransaksi({
-    user, appId, transactions, inventory,
+    user, transactions, inventory,
     setTransactions, setInventory, setActivityLogs,
     showNotif, navigateTo: handleSetView,
   });

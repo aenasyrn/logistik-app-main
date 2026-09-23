@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataPrinter/index.jsx
-"use client";
-
 import React, { useState } from "react";
 import {
   Printer, Search, Filter, Plus,

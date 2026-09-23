@@ -1,5 +1,3 @@
-"use client";
-
 import MasterBarang from "./MasterBarang";
 import MasterOutlet from "./MasterOutlet";
 import MasterVendor from "./MasterVendor";

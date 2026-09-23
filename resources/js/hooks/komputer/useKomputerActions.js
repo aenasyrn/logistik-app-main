@@ -5,8 +5,6 @@ import { router } from "@inertiajs/react";
 import { importKomputerCSV, downloadTemplate } from "../../services/komputerService";
 import { parseExcelFile } from "../../utils/excelHelper";
 
-const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
-
 export function useKomputerActions({ filteredData, setIsSaving, showNotif }) {
   const fileInputRef = useRef(null);
 
@@ -16,7 +14,7 @@ export function useKomputerActions({ filteredData, setIsSaving, showNotif }) {
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importKomputerCSV(APP_ID, data);
+      const total = await importKomputerCSV(data);
       showNotif(`Sukses! ${total} data komputer berhasil di-import.`, "success", () => {
         router.reload({ only: ['computers', 'activityLogs', 'outlets'] });
       });

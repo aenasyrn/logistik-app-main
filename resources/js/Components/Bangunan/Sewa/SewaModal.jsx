@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/Sewa/SewaModal.jsx
-"use client";
-
 import React, { useMemo, useEffect } from "react";
 import { X, Loader2, Key, Sparkles, Building2, Calendar, MapPin, DollarSign, Edit, Plus } from "lucide-react";
 import CustomSelectDropdown from "../../Form/CustomSelectDropdown";

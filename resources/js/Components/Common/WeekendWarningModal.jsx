@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CalendarX, Clock, X } from "lucide-react";

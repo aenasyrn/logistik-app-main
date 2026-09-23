@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataKomputer/KomputerTable.jsx
-"use client";
-
 import React, { useState } from "react";
 import {
   Loader2, Network, Cpu, HardDrive, AlertTriangle,

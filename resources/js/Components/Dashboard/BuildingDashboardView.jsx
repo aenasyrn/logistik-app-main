@@ -1,6 +1,4 @@
 // resources/js/Components/Dashboard/BuildingDashboardView.jsx
-"use client";
-
 import React from "react";
 import {
   Map, Key, Hammer, Clock, ArrowRight, Shield,

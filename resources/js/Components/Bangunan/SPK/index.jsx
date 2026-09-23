@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/SPK/index.jsx
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Plus, Trash2, Printer, RefreshCw, Settings } from "lucide-react";

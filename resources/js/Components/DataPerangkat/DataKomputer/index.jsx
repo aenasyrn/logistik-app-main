@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataKomputer/index.jsx
-"use client";
-
 import React, { useState } from "react";
 import {
   Monitor, Search, Filter, Plus,

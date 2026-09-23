@@ -1,6 +1,4 @@
 // resources/js/hooks/printer/usePrinterData.js
-"use client";
-
 import { useState, useEffect } from "react";
 import { calculateAutoStatus } from "../../utils/deviceUtils";
 import { usePrinterCRUD }    from "./usePrinterCRUD";

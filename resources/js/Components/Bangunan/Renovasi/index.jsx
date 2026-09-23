@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/Renovasi/index.jsx
-"use client";
-
 import React, { useState, useRef } from "react";
 import { Hammer, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Key, Upload } from "lucide-react";
 import axios from "axios";
@@ -1102,7 +1100,7 @@ export default function Renovasi({ userRole, renovations = [], outlets = [], ven
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importRenovationCSV("logistikku_app_01", data);
+      const total = await importRenovationCSV(data);
       showNotif(`Sukses! ${total} data renovasi berhasil di-import.`, "success", () => {
         router.reload({ only: ['buildingRenovations'] });
       });

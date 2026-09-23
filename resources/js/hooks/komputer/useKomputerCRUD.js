@@ -3,8 +3,6 @@ import { useState } from "react";
 import { addKomputer, updateKomputer, deleteKomputer } from "../../services/komputerService";
 import { emptyFormKomputer as emptyForm } from "../../utils/deviceUtils";
 
-const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
-
 export function useKomputerCRUD({ computerData, setComputerData, showNotif }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
@@ -76,14 +74,14 @@ export function useKomputerCRUD({ computerData, setComputerData, showNotif }) {
       };
 
       if (editingId) {
-        const updatedItem = await updateKomputer(APP_ID, editingId, payload);
+        const updatedItem = await updateKomputer(editingId, payload);
         const mergedItem = { ...formData, ...updatedItem, id: editingId };
         setComputerData((prev) =>
           prev.map((item) => (item.id === editingId ? mergedItem : item))
         );
         showNotif("Perubahan data komputer berhasil disimpan!");
       } else {
-        const newItem = await addKomputer(APP_ID, payload);
+        const newItem = await addKomputer(payload);
         const mergedItem = { ...formData, ...newItem };
         setComputerData((prev) => [mergedItem, ...prev]);
         showNotif("Data komputer baru berhasil ditambahkan!");
@@ -109,7 +107,7 @@ export function useKomputerCRUD({ computerData, setComputerData, showNotif }) {
     setIsSaving(true);
     try {
       setComputerData((prev) => prev.filter((p) => p.id !== id));
-      const res = await deleteKomputer(APP_ID, id);
+      const res = await deleteKomputer(id);
       showNotif(res?.message || "Data komputer berhasil dihapus.");
     } catch (err) {
       console.error(err);

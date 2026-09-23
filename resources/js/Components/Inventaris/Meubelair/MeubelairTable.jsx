@@ -1,6 +1,4 @@
 // resources/js/Components/Inventaris/Meubelair/MeubelairTable.jsx
-"use client";
-
 import React from "react";
 import { Edit, Trash2, MapPin } from "lucide-react";
 import { getMeubelairBadgeClass } from "../../../utils/meubelairColors";

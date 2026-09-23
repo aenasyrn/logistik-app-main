@@ -33,7 +33,7 @@ const parseCsvDate = (dateStr) => {
   return null;
 };
 
-export const importLandCSV = async (appId, rows) => {
+export const importLandCSV = async (rows) => {
   if (!rows || rows.length === 0) throw new Error("File CSV kosong");
 
   const formattedRows = [];

@@ -1,6 +1,4 @@
 // resources/js/Components/Dashboard/SecurityDashboardView.jsx
-"use client";
-
 import React from "react";
 import { Shield, CheckCircle2, AlertTriangle, Video, BarChart3, Clock, ArrowRight } from "lucide-react";
 import { router } from "@inertiajs/react";

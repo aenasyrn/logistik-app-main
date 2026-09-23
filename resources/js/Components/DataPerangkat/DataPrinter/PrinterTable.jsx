@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataPrinter/PrinterTable.jsx
-"use client";
-
 import React, { useState } from "react";
 import {
   Loader2, AlertTriangle, QrCode, Edit, Trash2,

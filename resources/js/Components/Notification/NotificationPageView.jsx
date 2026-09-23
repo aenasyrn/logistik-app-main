@@ -1,6 +1,4 @@
 // resources/js/Components/Notification/NotificationPageView.jsx
-"use client";
-
 import React, { useState } from "react";
 import { Printer, Monitor, Laptop, Map, Key, Clock, Check, Bell, ArrowRight, AlertTriangle, Loader2, CheckCircle, Eye } from "lucide-react";
 import { router } from "@inertiajs/react";

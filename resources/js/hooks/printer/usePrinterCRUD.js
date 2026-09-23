@@ -3,8 +3,6 @@ import { useState } from "react";
 import { addPrinter, updatePrinter, deletePrinter } from "../../services/printerService";
 import { emptyFormPrinter as emptyForm } from "../../utils/deviceUtils";
 
-const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
-
 export function usePrinterCRUD({ printerData, setPrinterData, showNotif, setCurrentPage, resetFilters }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
@@ -65,14 +63,14 @@ export function usePrinterCRUD({ printerData, setPrinterData, showNotif, setCurr
       };
 
       if (editingId) {
-        const updatedItem = await updatePrinter(APP_ID, editingId, payload);
+        const updatedItem = await updatePrinter(editingId, payload);
         const mergedItem = { ...formData, ...updatedItem, id: editingId };
         setPrinterData((prev) =>
           prev.map((item) => (item.id === editingId ? mergedItem : item))
         );
         showNotif("Perubahan data printer berhasil disimpan!");
       } else {
-        const newItem = await addPrinter(APP_ID, payload);
+        const newItem = await addPrinter(payload);
         const mergedItem = { ...formData, ...newItem };
         setPrinterData((prev) => [mergedItem, ...prev]);
         if (setCurrentPage) setCurrentPage(1);
@@ -100,7 +98,7 @@ export function usePrinterCRUD({ printerData, setPrinterData, showNotif, setCurr
     setIsSaving(true);
     try {
       setPrinterData((prev) => prev.filter((p) => p.id !== id));
-      const res = await deletePrinter(APP_ID, id);
+      const res = await deletePrinter(id);
       showNotif(res?.message || "Data printer berhasil dihapus.");
     } catch (err) {
       console.error(err);

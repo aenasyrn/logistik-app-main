@@ -1,6 +1,4 @@
 // resources/js/Components/Layout/NotificationBell.jsx
-"use client";
-
 import React from "react";
 import { Bell } from "lucide-react";
 

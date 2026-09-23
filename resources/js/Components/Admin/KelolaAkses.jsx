@@ -1,5 +1,4 @@
 // resources/js/Components/Admin/KelolaAkses.jsx
-"use client";
 
 import { useState } from "react";
 import {

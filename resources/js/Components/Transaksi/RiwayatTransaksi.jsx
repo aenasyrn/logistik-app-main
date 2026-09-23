@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import { Search, Download, FileText, ArrowLeft, ChevronLeft, ChevronRight, Printer, Edit, Trash2, CheckCircle, AlertTriangle, History } from "lucide-react";
 import { router, usePage } from "@inertiajs/react";

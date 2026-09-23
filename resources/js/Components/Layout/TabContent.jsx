@@ -1,7 +1,5 @@
 // src/components/TabContent.jsx
 // Render semua panel konten per tab
-"use client";
-
 import {
   DashboardView, DataMaster, FormView, PreviewView,
   DataPrinter, DataKomputer, DataLaptop,

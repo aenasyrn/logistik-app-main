@@ -1,4 +1,3 @@
-"use client";
 import React from "react";
 import { Printer, Monitor, Laptop, Clock } from "lucide-react";
 

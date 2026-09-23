@@ -1,6 +1,4 @@
 // resources/js/Components/Form/VendorSelectDropdown.jsx
-"use client";
-
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Building2 } from "lucide-react";

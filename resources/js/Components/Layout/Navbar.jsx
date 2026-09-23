@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import {
   Package, LayoutDashboard, Menu, X, LogOut, ChevronDown, Box, Building2, Database,

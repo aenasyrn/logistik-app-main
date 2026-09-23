@@ -1,4 +1,3 @@
-"use client";
 import { Printer, CheckCircle, AlertTriangle, Package } from "lucide-react";
 
 export default function PrinterStats({ printers = [], setView, setPrinterFilter }) {

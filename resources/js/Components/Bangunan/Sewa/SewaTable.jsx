@@ -1,6 +1,4 @@
 // resources/js/Components/Bangunan/Sewa/SewaTable.jsx
-"use client";
-
 import React, { useState } from "react";
 import { Edit, Trash2, Calendar, User, DollarSign, Building, Eye } from "lucide-react";
 import DetailHistoryModal from "@/Components/Common/DetailHistoryModal";

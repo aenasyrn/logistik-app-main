@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataPrinter/QrLabelModal.jsx
-"use client";
-
 import { X, QrCode, Printer as PrinterIcon } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 

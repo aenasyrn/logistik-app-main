@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterVendor.jsx
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import {
   Plus,
@@ -54,7 +52,7 @@ export default function MasterVendor({ vendors = [], userRole = "user" }) {
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importVendorCSV("logistikku_app_01", data);
+      const total = await importVendorCSV(data);
       if (total === 0) {
         showLocalNotif("Gagal import! Tidak ada data vendor valid yang dapat dibaca. Pastikan nama perusahaan terisi.", "error");
       } else {

@@ -1,6 +1,4 @@
 // src/components/Layout/TabBar.jsx
-"use client";
-
 import { X } from "lucide-react";
 import { VIEW_TITLES, PERMANENT_TABS } from "../../constants/tabConfig";
 

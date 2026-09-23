@@ -1,6 +1,4 @@
 // src/components/shared/ConfirmDeleteModal.jsx
-"use client";
-
 import { Loader2, AlertTriangle } from "lucide-react";
 
 /**

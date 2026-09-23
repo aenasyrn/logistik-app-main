@@ -1,4 +1,3 @@
-"use client";
 import React from "react";
 import { Laptop, CheckCircle, AlertTriangle, Package } from "lucide-react";
 

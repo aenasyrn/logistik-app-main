@@ -1,6 +1,4 @@
 // src/components/DataPerangkat/DataPrinter/PrinterModal.jsx
-"use client";
-
 import React, { useMemo } from "react";
 import { X, Loader2, Sparkles, Printer, Box, Building2 } from "lucide-react";
 import VendorSelectDropdown from "../../Form/VendorSelectDropdown";

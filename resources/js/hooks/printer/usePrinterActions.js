@@ -4,8 +4,6 @@ import * as XLSX from "xlsx";
 import { importPrinterCSV, downloadTemplate } from "../../services/printerService";
 import { parseExcelFile } from "../../utils/excelHelper";
 
-const APP_ID = process.env.NEXT_PUBLIC_APP_ID || "logistikku_app_01";
-
 export function usePrinterActions({ filteredData, setIsSaving, showNotif }) {
   const fileInputRef = useRef(null);
 
@@ -15,7 +13,7 @@ export function usePrinterActions({ filteredData, setIsSaving, showNotif }) {
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importPrinterCSV(APP_ID, data);
+      const total = await importPrinterCSV(data);
       showNotif(`Sukses! ${total} data printer berhasil di-import.`, "success");
     } catch (err) {
       console.error(err);

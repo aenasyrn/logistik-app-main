@@ -1,6 +1,4 @@
 // resources/js/Components/Inventaris/Meubelair/MeubelairView.jsx
-"use client";
-
 import React, { useState, useMemo, useRef } from "react";
 import {
   Search, Plus, FileSpreadsheet, Upload,

@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/MasterOutlet.jsx
-"use client";
-
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus,
@@ -96,7 +94,7 @@ export default function MasterOutlet({ outlets, userRole = "user", outletAreas =
     setIsSaving(true);
     try {
       const data = await parseExcelFile(file);
-      const total = await importOutletCSV("logistikku_app_01", data);
+      const total = await importOutletCSV(data);
       showLocalNotif(`Sukses! ${total} data instansi berhasil di-import.`, "success", () => {
         router.reload({ only: ['outlets', 'activityLogs'] });
       });

@@ -1,6 +1,4 @@
 // resources/js/Components/DataMaster/OutletFormModal.jsx
-"use client";
-
 import { useState, useEffect, useMemo } from "react";
 import { MapPin, X, Edit, Plus, Loader2, Settings, Building2 } from "lucide-react";
 import { router } from "@inertiajs/react";
