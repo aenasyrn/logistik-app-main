@@ -973,7 +973,7 @@ export default function RiwayatTransaksi({
                         </td>
                         <td className="py-2.5 px-3 text-gray-700 dark:text-slate-350 border border-slate-200 dark:border-[#213527] max-w-[250px] break-words">
                           {trx.items && trx.items.length > 0 ? (
-                            <div className="line-clamp-2 text-xs break-words break-all [overflow-wrap:anywhere]" title={trx.items.map(i => i.nama).join(", ")}>
+                            <div className="line-clamp-2 text-xs break-words break-all" title={trx.items.map(i => i.nama).join(", ")}>
                               {trx.items.map((i, idx) => (
                                 <span key={i.id || idx}>{i.nama} <span className="text-gray-400 dark:text-slate-500">({i.kuantitas})</span>{idx < trx.items.length - 1 ? ", " : ""}</span>
                               ))}

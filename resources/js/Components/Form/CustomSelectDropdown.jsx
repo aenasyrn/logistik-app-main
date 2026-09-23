@@ -215,7 +215,7 @@ export default function CustomSelectDropdown({
   return (
     <div ref={containerRef} className={`relative w-full ${isOpen ? "z-30" : "z-10"}`}>
       {label && (
-        <label className={labelCls || "block text-sm mb-2 font-medium text-gray-700 dark:text-slate-200 flex items-center gap-1.5"}>
+        <label className={labelCls || "block text-sm mb-2 font-medium text-gray-700 dark:text-slate-200 items-center gap-1.5"}>
           {Icon ? <Icon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : null}
           {label}
         </label>

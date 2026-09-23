@@ -606,7 +606,7 @@ const FormView = ({
                 </span>
               </div>
               {slotError && !tanggalIsWeekend && (
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-1 font-bold flex items-center gap-1">
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-1 font-bold items-center gap-1">
                   <AlertTriangle className="w-3 h-3 shrink-0" /> {slotError}
                 </span>
               )}
@@ -648,7 +648,7 @@ const FormView = ({
                 className={inputCls}
               />
               {tanggalIsWeekend && (
-                <span className="text-[10px] text-red-600 dark:text-red-400 block mt-1 font-bold flex items-center gap-1">
+                <span className="text-[10px] text-red-600 dark:text-red-400 block mt-1 font-bold items-center gap-1">
                   <AlertTriangle className="w-3 h-3 shrink-0" /> Hari Sabtu & Minggu tidak dapat disubmit (hanya Senin s.d. Jumat).
                 </span>
               )}

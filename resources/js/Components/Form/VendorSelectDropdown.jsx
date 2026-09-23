@@ -133,7 +133,7 @@ export default function VendorSelectDropdown({
   return (
     <div ref={containerRef} className="relative w-full">
       {label && (
-        <label className="block text-xs font-bold text-gray-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+        <label className="block text-xs font-bold text-gray-800 dark:text-slate-200 mb-1.5 items-center gap-1.5">
           {Icon ? <Icon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : null}
           {label}
         </label>
