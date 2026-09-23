@@ -25,6 +25,7 @@ use App\Models\OutletArea;
 
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -32,9 +33,94 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
-        $inventoryQuery = Inventory::orderBy('id', 'desc');
- 
-        $sewaOrderMap = \Illuminate\Support\Facades\DB::table('menu_sewa')
+        return Inertia::render('App', [
+            ...$this->inventoryProps(),
+            ...$this->buildingProps(),
+            ...$this->meubelairProps(),
+            'currentUserRole' => $user->role,
+            'outlets' => Inertia::lazy(fn () => $this->orderedOutlets()),
+            'vendors' => Inertia::lazy(fn () => Vendor::orderByDesc('id')->get()),
+            'buildingRenovations' => Inertia::lazy(fn () => BuildingRenovation::orderByDesc('id')->get()),
+            'securityFacilities' => Inertia::lazy(fn () => SecurityFacility::orderByRaw('CAST(no_urut AS UNSIGNED) ASC')->get()),
+            'masterMeubelairs' => Inertia::lazy(fn () => MasterMeubelair::orderByDesc('id')->get()),
+            'outletAreas' => Inertia::lazy(fn () => OutletArea::with('cabangs')->orderBy('nama')->get()),
+            'activityLogs' => $this->activityLogsProp($user),
+            'usersList' => $this->usersListProp($user),
+            'spkHistory' => Inertia::lazy(fn () => SpkHistory::orderBy('created_at', 'desc')->get()),
+            'soppHistory' => Inertia::lazy(fn () => SoppHistory::orderBy('created_at', 'desc')->get()),
+        ]);
+    }
+
+    private function inventoryProps(): array
+    {
+        return [
+            'inventory' => Inventory::with('histories')
+                ->withCount(['computers', 'printers', 'laptops'])
+                ->orderByDesc('id')
+                ->get(),
+            'transactions' => Transaction::with('items')->orderByDesc('created_at')->get(),
+            'computers' => Computer::with(['histories', 'outlet_rel:id,nama,area,cabang'])
+                ->orderByDesc('updated_at')->orderByDesc('id')->get(),
+            'printers' => Printer::with(['histories', 'outlet_rel:id,nama,area,cabang'])
+                ->orderByDesc('updated_at')->orderByDesc('id')->get(),
+            'laptops' => Laptop::with('histories')
+                ->orderByDesc('updated_at')->orderByDesc('id')->get(),
+        ];
+    }
+
+    private function buildingProps(): array
+    {
+        return [
+            'buildingLands' => BuildingLand::with('histories')->orderByDesc('id')->get(),
+            'buildingSewas' => BuildingSewa::with('histories')->orderByDesc('id')->get(),
+        ];
+    }
+
+    private function meubelairProps(): array
+    {
+        return [
+            'meubelairs' => Meubelair::with('outlet_rel:id,nama,area,cabang')->orderByDesc('id')->get(),
+            'jenisMeubelairs' => JenisMeubelair::orderBy('nama')->get(),
+        ];
+    }
+
+    private function activityLogsProp(User $user)
+    {
+        $adminEmails = User::where('role', 'admin')->pluck('email')->filter()->toArray();
+        $adminEmails = array_values(array_unique(array_merge(
+            $adminEmails,
+            ['admin@logistik.co.id', 'admin@system.com']
+        )));
+        $adminEmailsLower = array_map('strtolower', $adminEmails);
+
+        return Inertia::lazy(function () use ($user, $adminEmailsLower) {
+            if ($user->role === 'guest') {
+                return [];
+            }
+
+            $query = ActivityLog::orderByDesc('timestamp');
+            if ($user->role !== 'admin') {
+                $query->where('user_email', $user->email);
+            }
+
+            return $query->get()->map(function ($log) use ($adminEmailsLower) {
+                $log->is_admin = in_array(strtolower($log->user_email ?? ''), $adminEmailsLower, true);
+                return $log;
+            });
+        });
+    }
+
+    private function usersListProp(User $user)
+    {
+        return Inertia::lazy(fn () => $user->role === 'admin'
+            ? User::select(['id', 'name', 'email', 'role', 'created_at'])->orderByDesc('id')->get()
+            : []
+        );
+    }
+
+    private function orderedOutlets()
+    {
+        $sewaOrderMap = DB::table('menu_sewa')
             ->orderBy('id', 'asc')
             ->get(['id', 'nama_outlet'])
             ->pluck('id', 'nama_outlet')
@@ -55,7 +141,7 @@ class DashboardController extends Controller
             $sewaOrderMap[$areaName] = $orderVal;
         }
 
-        $outlets = Outlet::all()->sort(function ($a, $b) use ($sewaOrderMap) {
+        return Outlet::all()->sort(function ($a, $b) use ($sewaOrderMap) {
             $nameA = strtoupper(trim($a->nama));
             $nameB = strtoupper(trim($b->nama));
 
@@ -88,53 +174,5 @@ class DashboardController extends Controller
             }
             return $orderA <=> $orderB;
         })->values();
-
-        $adminEmails = User::where('role', 'admin')->pluck('email')->filter()->toArray();
-        $adminEmails = array_values(array_unique(array_merge($adminEmails, ['admin@logistik.co.id', 'admin@system.com'])));
-        $adminEmailsLower = array_map('strtolower', $adminEmails);
-
-        return Inertia::render('App', [
-            'inventory' => $inventoryQuery->with('histories')->withCount(['computers', 'printers', 'laptops'])->get(),
-            'outlets' => $outlets,
-            'vendors' => Vendor::orderBy('id', 'desc')->get(),
-            'transactions' => Transaction::with('items')->orderBy('created_at', 'desc')->get(),
-            'computers' => Computer::with(['histories', 'outlet_rel:id,nama,area,cabang'])->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get(),
-            'printers' => Printer::with(['histories', 'outlet_rel:id,nama,area,cabang'])->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get(),
-            'laptops' => Laptop::with('histories')->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get(),
-            'currentUserRole' => $user->role,
-            
-            // Lazy Loaded Tabs: Hanya diambil saat tab dibuka, tidak diekspos di inspect element saat load awal
-            'activityLogs' => Inertia::lazy(function () use ($user, $adminEmailsLower) {
-                if ($user->role === 'guest') {
-                    return [];
-                }
-                $activityLogsQuery = ActivityLog::orderBy('timestamp', 'desc');
-                if ($user->role !== 'admin') {
-                    // Role Protection: Staf biasa hanya bisa melihat riwayat aktivitas akunnya sendiri
-                    $activityLogsQuery->where('user_email', $user->email);
-                }
-                return $activityLogsQuery->get()->map(function ($log) use ($adminEmailsLower) {
-                    $log->is_admin = in_array(strtolower($log->user_email ?? ''), $adminEmailsLower);
-                    return $log;
-                });
-            }),
-            'usersList' => Inertia::lazy(function () use ($user) {
-                return $user->role === 'admin'
-                    ? User::select(['id', 'name', 'email', 'role', 'created_at'])->orderBy('id', 'desc')->get()
-                    : [];
-            }),
-            'spkHistory' => Inertia::lazy(fn() => SpkHistory::orderBy('created_at', 'desc')->get()),
-            'soppHistory' => Inertia::lazy(fn() => SoppHistory::orderBy('created_at', 'desc')->get()),
-
-            'buildingLands' => BuildingLand::with('histories')->orderBy('id', 'desc')->get(),
-            'buildingSewas' => BuildingSewa::with('histories')->orderBy('id', 'desc')->get(),
-            'buildingRenovations' => BuildingRenovation::orderBy('id', 'desc')->get(),
-            'securityFacilities' => SecurityFacility::orderByRaw('CAST(no_urut AS UNSIGNED) ASC')->get(),
-            
-            'meubelairs' => Meubelair::with('outlet_rel:id,nama,area,cabang')->orderBy('id', 'desc')->get(),
-            'masterMeubelairs' => MasterMeubelair::orderBy('id', 'desc')->get(),
-            'jenisMeubelairs' => JenisMeubelair::orderBy('nama', 'asc')->get(),
-            'outletAreas' => OutletArea::with('cabangs')->orderBy('nama', 'asc')->get(),
-        ]);
     }
 }

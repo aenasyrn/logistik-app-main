@@ -274,26 +274,58 @@ export default function App(props) {
   const { notif, showNotif } = useNotif();
   const { tabs, setTabs, activeTab, setActiveTab, handleSetView } = useTabs();
 
-  // On-demand fetch untuk tab yang di-lazy load (hanya diambil saat tab dibuka pertama kali)
-  const lazyLoadedRef = useRef(new Set());
+  // Load data khusus modul hanya ketika tab pertama kali dibuka.
+  const lazyRequestedRef = useRef(new Set());
+
+  const lazyPropsByTab = {
+    dashboard_bangunan: ["buildingRenovations"],
+    dashboard_pengamanan: ["securityFacilities"],
+    master_barang: ["masterMeubelairs", "vendors", "outlets"],
+    master_barang_meubelair: ["masterMeubelairs", "vendors", "outlets"],
+    master_barang_non_meubelair: ["masterMeubelairs", "vendors", "outlets"],
+    master_outlet: ["outlets", "outletAreas"],
+    master_vendor: ["vendors"],
+    form: ["masterMeubelairs", "vendors", "outlets"],
+    pusat_data_barang: ["masterMeubelairs", "vendors", "outlets"],
+    inventaris_mebelair: ["vendors", "outlets"],
+    mebelair_meja: ["vendors", "outlets"],
+    mebelair_kursi: ["vendors", "outlets"],
+    mebelair_lemari: ["vendors", "outlets"],
+    mebelair_sofa: ["vendors", "outlets"],
+    mebelair_ac: ["vendors", "outlets"],
+    perangkat_printer: ["vendors", "outlets"],
+    perangkat_komputer: ["vendors", "outlets"],
+    perangkat_laptop: ["vendors", "outlets"],
+    bangunan_tanah: ["vendors", "outlets"],
+    bangunan_sewa: ["vendors", "outlets"],
+    bangunan_renovasi: ["buildingRenovations", "vendors", "outlets"],
+    bangunan_sarana: ["securityFacilities", "outlets"],
+    sopp_pengadaan: ["masterMeubelairs", "vendors", "outlets"],
+    sopp_sewa: ["masterMeubelairs", "vendors", "outlets"],
+    sopp_renovasi: ["masterMeubelairs", "vendors", "outlets"],
+  };
 
   useEffect(() => {
     if (!activeTab) return;
 
-    if (activeTab === "log_aktivitas" && !props.activityLogs && !lazyLoadedRef.current.has("activityLogs")) {
-      lazyLoadedRef.current.add("activityLogs");
-      router.reload({ only: ["activityLogs"] });
-    } else if (activeTab === "kelola_user" && userRole === "admin" && !props.usersList && !lazyLoadedRef.current.has("usersList")) {
-      lazyLoadedRef.current.add("usersList");
-      router.reload({ only: ["usersList"] });
-    } else if (activeTab.startsWith("spk_") && !props.spkHistory && !lazyLoadedRef.current.has("spkHistory")) {
-      lazyLoadedRef.current.add("spkHistory");
-      router.reload({ only: ["spkHistory"] });
-    } else if (activeTab.startsWith("sopp_") && !props.soppHistory && !lazyLoadedRef.current.has("soppHistory")) {
-      lazyLoadedRef.current.add("soppHistory");
-      router.reload({ only: ["soppHistory"] });
+    const requestedProps = [
+      ...(activeTab === "log_aktivitas" ? ["activityLogs"] : []),
+      ...(activeTab === "kelola_user" && userRole === "admin" ? ["usersList"] : []),
+      ...(activeTab.startsWith("spk_") ? ["spkHistory"] : []),
+      ...(activeTab.startsWith("sopp_") ? ["soppHistory"] : []),
+      ...(lazyPropsByTab[activeTab] || []),
+    ];
+    const missingProps = requestedProps.filter((prop) => props[prop] === undefined);
+    const propsToLoad = missingProps.filter((prop) => !lazyRequestedRef.current.has(prop));
+
+    if (propsToLoad.length > 0) {
+      propsToLoad.forEach((prop) => lazyRequestedRef.current.add(prop));
+      router.reload({
+        only: propsToLoad,
+        onError: () => propsToLoad.forEach((prop) => lazyRequestedRef.current.delete(prop)),
+      });
     }
-  }, [activeTab, userRole, props.activityLogs, props.usersList, props.spkHistory, props.soppHistory]);
+  }, [activeTab, userRole, props]);
   
   // Scroll to top on active tab view change
   useEffect(() => {
