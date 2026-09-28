@@ -614,6 +614,7 @@ export default function App(props) {
 
             formData={formData}
             setFormData={setFormData}
+            startNewDocument={startNewDocument}
             items={items}
             setItems={setItems}
             activeTransaction={activeTransaction}

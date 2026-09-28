@@ -84,6 +84,7 @@ export default function TabContent({
   onRefreshJenis = null,
   // form props
   formData, setFormData,
+  startNewDocument,
   items, setItems,
   activeTransaction, setActiveTransaction,
   // handlers
@@ -134,6 +135,7 @@ export default function TabContent({
             transactions={transactions}
             inventory={inventory}
             setView={setView}
+            startNewDocument={startNewDocument}
             activeTab={activeTab}
             user={user}
             userRole={userRole}
