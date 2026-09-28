@@ -54,7 +54,7 @@ export const VIEW_BREADCRUMBS = {
   master_barang_non_meubelair: { category: "DATA MASTER", breadcrumb: "Master Barang > Non Meubelair" },
   master_outlet: { category: "DATA MASTER", breadcrumb: "Master Outlet" },
   master_vendor: { category: "DATA MASTER", breadcrumb: "Master Vendor" },
-  pusat_data_barang: { category: "INVENTARIS", breadcrumb: "Pusat Data Barang" },
+  pusat_data_barang: { category: "HOME", breadcrumb: "Pusat Data Barang" },
   inventaris_mebelair: { category: "INVENTARIS", breadcrumb: "Meubelair" },
   mebelair_meja: { category: "INVENTARIS", breadcrumb: "Meubelair > Data Meja" },
   mebelair_kursi: { category: "INVENTARIS", breadcrumb: "Meubelair > Data Kursi" },

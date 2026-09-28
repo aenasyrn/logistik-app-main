@@ -38,7 +38,7 @@ const Navbar = ({
     if (v.startsWith("dashboard") || v === "dashboard") return "home";
     if (v.startsWith("spk_") || v.startsWith("sopp_") || v === "form" || v === "riwayat") return "surat";
     if (v.startsWith("master_")) return "data_master";
-    if (v.startsWith("perangkat_") || v.startsWith("inventaris_") || v.startsWith("mebelair_") || v === "pusat_data_barang") return "inventaris";
+    if (v.startsWith("perangkat_") || v.startsWith("inventaris_") || v.startsWith("mebelair_")) return "inventaris";
     if (v.startsWith("bangunan_")) return "bangunan";
     if (v === "log_aktivitas" || v === "kelola_user") return "pengaturan";
     return "home";
@@ -389,6 +389,18 @@ const Navbar = ({
                   <Shield className="w-5 h-5 shrink-0" />
                   <span>Dashboard Pengamanan & Korporasi</span>
                 </button>
+
+                <button
+                  onClick={() => handleNavClick("pusat_data_barang")}
+                  className={`w-full px-4 py-3 rounded-xl font-semibold text-sm flex items-center gap-3 text-left transition-all ${
+                    view === "pusat_data_barang"
+                      ? "bg-[#279969]/20 text-[#0d5c3a] border border-[#279969]/30 dark:bg-[#279969]/30 dark:text-emerald-200 shadow-2xs font-bold"
+                      : "text-gray-800 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-[#1a2b20]"
+                  }`}
+                >
+                  <Database className="w-5 h-5 shrink-0" />
+                  <span>Pusat Data Barang</span>
+                </button>
               </div>
             )}
 
@@ -602,17 +614,6 @@ const Navbar = ({
             {/* SUB-MENU FOR INVENTARIS */}
             {primaryCategory === "inventaris" && (
               <div className="space-y-2">
-                <button
-                  onClick={() => handleNavClick("pusat_data_barang")}
-                  className={`w-full px-4 py-3 rounded-xl font-semibold text-sm flex items-center gap-3 text-left transition-all ${
-                    view === "pusat_data_barang"
-                      ? "bg-[#279969]/20 text-[#0d5c3a] border border-[#279969]/30 dark:bg-[#279969]/30 dark:text-emerald-200 shadow-2xs font-bold"
-                      : "text-gray-800 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-[#1a2b20]"
-                  }`}
-                >
-                  <FileText className="w-5 h-5 shrink-0" />
-                  <span>Pusat Data Barang</span>
-                </button>
                 {/* Meubelair Single Link */}
                 <button
                   onClick={() => handleNavClick("inventaris_mebelair")}
