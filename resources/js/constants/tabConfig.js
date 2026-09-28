@@ -106,7 +106,7 @@ export const TAB_URL_MAP = {
   mebelair_lemari: "/mebelair-lemari",
   mebelair_sofa: "/mebelair-sofa",
   mebelair_ac: "/mebelair-ac",
-  form: "/surat-jalan",
+  form: "/bast",
   preview: "/preview-surat",
   perangkat_printer: "/data-printer",
   perangkat_komputer: "/data-pc",

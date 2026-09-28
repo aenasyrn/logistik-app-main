@@ -271,7 +271,7 @@ const Navbar = ({
         }`}
       >
         {/* PRIMARY LEFT ICON SIDEBAR (Rich Modern Dark Green Gradient) */}
-        <div className="w-[84px] bg-gradient-to-b from-[#0d5c3a] via-[#137447] to-[#083c25] dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] flex flex-col items-center shrink-0 shadow-xl text-white">
+        <div className="w-[72px] bg-gradient-to-b from-[#0d5c3a] via-[#137447] to-[#083c25] dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] flex flex-col items-center shrink-0 shadow-xl text-white">
           {/* Top Menu / Logo Icon */}
           <div className="h-16 flex items-center justify-center w-full border-b border-white/10 shrink-0">
             <button
@@ -323,7 +323,7 @@ const Navbar = ({
 
         {/* SECONDARY SUB-NAV SIDEBAR */}
         <div
-          className={`w-[260px] bg-slate-50/90 dark:bg-[#0c1410]/95 backdrop-blur-md border-r border-gray-200/80 dark:border-[#213527] flex flex-col h-full shadow-lg transition-all duration-300 ${
+          className={`w-[220px] bg-slate-50/90 dark:bg-[#0c1410]/95 backdrop-blur-md border-r border-gray-200/80 dark:border-[#213527] flex flex-col h-full shadow-lg transition-all duration-300 ${
             isSidebarOpen ? "block" : "hidden"
           }`}
         >

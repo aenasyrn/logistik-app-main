@@ -47,7 +47,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/master-barang', [DashboardController::class, 'index']);
     Route::get('/master-outlet', [DashboardController::class, 'index']);
     Route::get('/master-vendor', [DashboardController::class, 'index']);
-    Route::get('/surat-jalan', [DashboardController::class, 'index']);
+    Route::get('/bast', [DashboardController::class, 'index']);
     Route::get('/preview-surat', [DashboardController::class, 'index']);
     Route::get('/data-printer', [DashboardController::class, 'index']);
     Route::get('/data-pc', [DashboardController::class, 'index']);

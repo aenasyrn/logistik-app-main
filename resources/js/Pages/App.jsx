@@ -549,7 +549,7 @@ export default function App(props) {
       />
 
       {/* Main Content Area */}
-      <div className={`pt-16 md:pt-0 ${isSidebarOpen ? "md:pl-[340px]" : "md:pl-[84px]"} flex flex-col min-h-screen print:pl-0 print:pt-0 transition-all duration-300`}>
+      <div className={`pt-16 md:pt-0 ${isSidebarOpen ? "md:pl-[292px]" : "md:pl-[72px]"} flex flex-col min-h-screen print:pl-0 print:pt-0 transition-all duration-300`}>
 
         {/* Sticky App Header */}
         <AppHeader

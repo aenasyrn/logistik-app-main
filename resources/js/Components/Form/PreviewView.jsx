@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { ArrowLeft, Save, Printer } from "lucide-react";
+import { AlertCircle, ArrowLeft, Save, Printer } from "lucide-react";
 import WeekendWarningModal from "../Common/WeekendWarningModal";
+
+const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
 
 const PreviewView = ({
   formData,
@@ -9,6 +11,8 @@ const PreviewView = ({
   setView,
   handleSaveTransaction,
   isSaving,
+  isLivePreview = false,
+  canProceed = true,
 }) => {
   const [showWeekendModal, setShowWeekendModal] = useState(false);
 
@@ -32,24 +36,48 @@ const PreviewView = ({
   };
 
   const isTanggalWeekend = isWeekend(formData?.tanggal);
+  const nomorSurat = String(formData?.nomorSurat || "").trim();
+  const nomorIsValid = NOMOR_PATTERN.test(nomorSurat) && !/^0+$/.test(nomorSurat.split("/")[0]);
+  const isActionDisabled = isSaving || isTanggalWeekend || !nomorIsValid || (isLivePreview && !canProceed);
+  const showValidationWarning = !nomorIsValid || (isLivePreview && !canProceed);
+  const validationMessage = !nomorIsValid
+    ? "Nomor surat belum diisi! Harap masukkan nomor surat terlebih dahulu untuk mencetak atau menyimpan transaksi."
+    : "Lengkapi data wajib pada formulir sebelum mencetak atau menyimpan transaksi.";
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white mt-6 shadow-xl relative print:shadow-none print:m-0 print:p-0 print:max-w-none print:bg-transparent">
+    <div className={`w-full ${isLivePreview ? "max-w-none" : "max-w-4xl mx-auto mt-6 shadow-xl"} bg-white relative print:shadow-none print:m-0 print:p-0 print:max-w-none print:bg-transparent`}>
+      {showValidationWarning && (
+        <div className="print:hidden flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3.5 py-3 text-[11px] font-semibold text-amber-800 sm:px-4 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {validationMessage}
+        </div>
+      )}
       {/* NAVBAR PREVIEW (Disembunyikan saat print) */}
-      <div className="print:hidden p-4 bg-gray-100 flex justify-between items-center sticky top-0 z-10 border-b">
-        <button
-          onClick={() => setView("form")}
-          className="flex items-center gap-2 text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-55 font-medium transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />{" "}
-          Edit Kembali
-        </button>
+      <div className="print:hidden p-3 bg-slate-50 flex justify-between items-center sticky top-0 z-10 border-b border-slate-200 sm:p-4">
+        {isLivePreview ? (
+          <span className="text-xs font-bold text-slate-700">Preview BAST</span>
+        ) : (
+          <button
+            onClick={() => setView("form")}
+            className="flex items-center gap-2 text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 font-medium transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" /> Edit Kembali
+          </button>
+        )}
         <div className="flex items-center gap-3">
           {isTanggalWeekend && (
             <span className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
               ⚠️ Hari Sabtu & Minggu tidak dapat disubmit (hanya Senin s.d. Jumat).
             </span>
           )}
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={isActionDisabled}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5"
+          >
+            <Printer className="h-3.5 w-3.5" /> Cetak
+          </button>
           <button
             onClick={() => {
               if (isTanggalWeekend) {
@@ -58,9 +86,9 @@ const PreviewView = ({
               }
               handleSaveTransaction();
             }}
-            disabled={isSaving || isTanggalWeekend}
+            disabled={isActionDisabled}
             className={`flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
-              isSaving || isTanggalWeekend ? "opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400" : "cursor-pointer"
+              isActionDisabled ? "opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400" : "cursor-pointer"
             }`}
           >
             {isSaving ? (

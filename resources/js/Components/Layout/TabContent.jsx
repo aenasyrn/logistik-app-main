@@ -1,5 +1,6 @@
 // src/components/TabContent.jsx
 // Render semua panel konten per tab
+import { useState } from "react";
 import {
   DashboardView, DataMaster, FormView, PreviewView,
   DataPrinter, DataKomputer, DataLaptop,
@@ -124,6 +125,7 @@ export default function TabContent({
   notificationCategoryFilter,
   setNotificationCategoryFilter,
 }) {
+  const [canSaveBastPreview, setCanSaveBastPreview] = useState(false);
   const has = (id) => tabs.some((t) => t.id === id);
 
   return (
@@ -184,21 +186,38 @@ export default function TabContent({
           {userRole === "guest" ? (
             <AccessDeniedSurat setView={setView} />
           ) : (
-            <FormView
-              formData={formData}
-              handleInputChange={handleInputChange}
-              items={items}
-              handleItemChange={handleItemChange}
-              addItem={addItem}
-              removeItem={removeItem}
-              setView={setView}
-              inventory={inventory}
-              masterMeubelairs={masterMeubelairs}
-              outlets={outlets}
-              vendors={vendors}
-              transactions={transactions}
-              activeTransaction={activeTransaction}
-            />
+            <div className="mx-auto grid w-full max-w-[1700px] grid-cols-1 items-start gap-4 px-3 py-4 sm:px-5 lg:grid-cols-12 lg:gap-5 lg:px-6">
+              <div className="min-w-0 lg:col-span-6">
+                <FormView
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                  items={items}
+                  handleItemChange={handleItemChange}
+                  addItem={addItem}
+                  removeItem={removeItem}
+                  setView={setView}
+                  inventory={inventory}
+                  masterMeubelairs={masterMeubelairs}
+                  outlets={outlets}
+                  vendors={vendors}
+                  transactions={transactions}
+                  activeTransaction={activeTransaction}
+                  onValidityChange={setCanSaveBastPreview}
+                />
+              </div>
+              <div className="hidden min-w-0 lg:sticky lg:top-4 lg:col-span-6 lg:block">
+                <PreviewView
+                  formData={formData}
+                  items={items}
+                  activeTransaction={activeTransaction}
+                  setView={setView}
+                  handleSaveTransaction={handleSaveTransaction}
+                  isSaving={isSaving}
+                  isLivePreview
+                  canProceed={canSaveBastPreview}
+                />
+              </div>
+            </div>
           )}
         </Panel>
       )}

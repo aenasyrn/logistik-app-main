@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { usePage } from "@inertiajs/react";
 import {
-  FileText, ArrowRight, Plus, Trash2, AlertCircle, AlertTriangle, Info,
+  FileText, ArrowLeft, ArrowRight, Plus, Trash2, AlertCircle, AlertTriangle, Info,
   Package, PackageCheck, PackageMinus, User, Building2, Hash,
   MapPin, Calendar, ClipboardList, ChevronDown, Settings,
 } from "lucide-react";
@@ -12,7 +12,7 @@ import LetterNumberSettingsModal from "./LetterNumberSettingsModal";
 import WeekendWarningModal from "../Common/WeekendWarningModal";
 import axios from "axios";
 
-const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/\d{2}\/\d{4}$/;
+const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
 
 const isNomorValid = (nomor) => {
   if (!nomor || !NOMOR_PATTERN.test(nomor)) return false;
@@ -171,6 +171,7 @@ const FormView = ({
   vendors = [],
   transactions = [],
   activeTransaction = null,
+  onValidityChange = () => {},
 }) => {
   const [nomorUrut, setNomorUrut] = useState("");
   const [jenisTransaksi, setJenisTransaksi] = useState(
@@ -186,6 +187,7 @@ const FormView = ({
   const [showWeekendModal, setShowWeekendModal] = useState(false);
   const [slotError, setSlotError] = useState(null);
   const [letterNumberMode, setLetterNumberMode] = useState("otomatis");
+  const [activeFormTab, setActiveFormTab] = useState("kop");
   const isManualMode = letterNumberMode === "manual";
 
   const isKeluar = jenisTransaksi === "Barang Keluar";
@@ -198,7 +200,6 @@ const FormView = ({
   const selectedOutletObj = (outlets || []).find((o) => o.nama === currentOutletName);
 
   const dateObj = formData.tanggal ? new Date(formData.tanggal) : new Date();
-  const bulan = String(dateObj.getMonth() + 1).padStart(2, "0");
   const tahun = dateObj.getFullYear();
 
   // Outlet code for Nomor Surat:
@@ -211,7 +212,7 @@ const FormView = ({
         ? selectedOutletObj.code || selectedOutletObj.kode || selectedOutletObj.kode_outlet || defaultKode
         : defaultKode);
 
-  const suffix = `/${kodeOutlet || "____"}/${bulan}/${tahun}`;
+  const suffix = `/${kodeOutlet || "____"}/04/${tahun}`;
 
   // Sync local states with loaded transaction data when editing or starting new
   useEffect(() => {
@@ -243,7 +244,7 @@ const FormView = ({
       const fullNo = `${nomorUrut.padStart(3, "0")}${suffix}`;
       handleInputChange({ target: { name: "nomorSurat", value: fullNo } });
     }
-  }, [nomorUrut, kodeOutlet, bulan, tahun]);
+  }, [nomorUrut, kodeOutlet, tahun]);
 
   const fetchNextNumber = async (selectedDate = formData.tanggal, selectedJenis = jenisTransaksi) => {
     if (activeTransaction) return;
@@ -263,9 +264,8 @@ const FormView = ({
           ? defaultKode
           : (selectedOutletObj ? selectedOutletObj.code || selectedOutletObj.kode || selectedOutletObj.kode_outlet || defaultKode : defaultKode);
         const dateParts = String(qDate).split("T")[0].split("-");
-        const targetBulan = dateParts.length === 3 ? dateParts[1] : String(new Date(qDate).getMonth() + 1).padStart(2, "0");
         const targetTahun = dateParts.length === 3 ? dateParts[0] : new Date(qDate).getFullYear();
-        const currentTargetSuffix = `/${currentTargetKode || "____"}/${targetBulan}/${targetTahun}`;
+        const currentTargetSuffix = `/${currentTargetKode || "____"}/04/${targetTahun}`;
         handleInputChange({
           target: { name: "nomorSurat", value: `${nextNum.padStart(3, "0")}${currentTargetSuffix}` },
         });
@@ -425,6 +425,10 @@ const FormView = ({
 
   const canProceed = nomorIsValid && outletIsValid && pihakIsValid && itemsValid && !hasInvalidStock && !tanggalIsWeekend;
 
+  useEffect(() => {
+    onValidityChange(canProceed);
+  }, [canProceed, onValidityChange]);
+
   const handleProceedToPreview = () => {
     if (tanggalIsWeekend) {
       setShowWeekendModal(true);
@@ -439,26 +443,26 @@ const FormView = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto mt-6 print:hidden pb-10 space-y-6">
+    <div className="w-full max-w-none space-y-4 pb-6 print:hidden">
       {/* ── TOP BAR ── */}
-      <div className="bg-white dark:bg-gradient-to-br dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-3xl shadow-xl shadow-gray-200/60 dark:shadow-none border border-gray-200/90 dark:border-[#2b4533] px-6 py-5 flex items-center justify-between transition-all">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 px-4 py-4 sm:px-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/30">
+          <div className="w-10 h-10 rounded-xl bg-emerald-700 flex items-center justify-center flex-shrink-0 text-white">
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-gray-900 dark:text-slate-100 leading-tight tracking-tight">Buat Surat Serah Terima</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 font-medium">Isi semua data dengan benar sebelum lanjut ke preview</p>
+            <h2 className="text-base font-extrabold text-gray-900 dark:text-slate-100 leading-tight">{activeTransaction ? "Edit Berita Acara (BAST)" : "Buat Berita Acara (BAST)"}</h2>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Editor Berita Acara Serah Terima Barang</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {hasInvalidStock && (
-            <span className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-2xs">
+            <span className="hidden md:flex text-[11px] text-red-700 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg font-bold items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Stok barang tidak valid / tidak cukup
             </span>
           )}
           {hasSubmittedValidation && !canProceed && (
-            <div className="flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               {isDuplicateNomor ? (
                 <span className="text-[11px] font-extrabold text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 px-3.5 py-1.5 rounded-xl border border-red-200 dark:border-red-800 flex items-center gap-1.5 shadow-2xs">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Nomor surat sudah digunakan!
@@ -493,14 +497,35 @@ const FormView = ({
           <button
             type="button"
             onClick={handleProceedToPreview}
-            className="bg-[#279969] hover:bg-[#1e7a53] active:scale-95 text-white px-7 py-3 rounded-full text-xs font-bold tracking-wide uppercase transition-all shadow-md shadow-[#279969]/30 cursor-pointer"
+            className="lg:hidden inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
           >
-            Lanjut ke Preview &gt;
+            Preview <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
+      <div className="grid grid-cols-3 rounded-xl bg-emerald-800 p-1 text-center text-[11px] font-bold shadow-sm sm:text-xs" role="tablist" aria-label="Tahapan formulir BAST">
+        {[
+          { id: "kop", label: "Kop & Pihak" },
+          { id: "pihak", label: "Pihak Terlibat" },
+          { id: "barang", label: `Daftar Barang (${items.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeFormTab === tab.id}
+            onClick={() => setActiveFormTab(tab.id)}
+            className={`min-h-10 rounded-lg px-1.5 py-2 transition-colors sm:px-3 ${activeFormTab === tab.id ? "bg-white text-emerald-800 shadow-sm" : "text-emerald-50 hover:bg-emerald-700"}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* ── SECTION 1: Info Dokumen ── */}
+      {activeFormTab === "kop" && (
+        <>
       <div className="bg-white dark:bg-gradient-to-br dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-3xl shadow-xl shadow-gray-200/60 dark:shadow-none border border-gray-200/90 dark:border-[#2b4533] p-6 sm:p-7 transition-all">
         <h3 className="text-sm sm:text-base font-black tracking-wide uppercase text-emerald-600 dark:text-emerald-400 mb-5 flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -565,7 +590,7 @@ const FormView = ({
             </Field>
           </div>
 
-          <div className="md:col-span-4">
+          <div className="md:col-span-5 min-w-0">
             <div>
               <div className="flex items-center justify-between mb-1.5 h-5 leading-none">
                 <label className="flex items-center gap-1.5 text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase tracking-wider">
@@ -594,14 +619,14 @@ const FormView = ({
                   value={nomorUrut}
                   readOnly={!isManualMode}
                   onChange={isManualMode ? handleNomorChange : undefined}
-                  className={`min-w-[4rem] w-auto h-full px-2.5 text-center font-mono font-black text-sm outline-none focus:outline-none focus:ring-0 focus:border-none border-none bg-transparent ${
+                  className={`w-[3.75rem] min-w-[3.75rem] shrink-0 h-full px-1 text-center font-mono font-black text-sm outline-none focus:outline-none focus:ring-0 focus:border-none border-none bg-transparent ${
                     isManualMode
                       ? "text-gray-900 dark:text-slate-100 cursor-text"
                       : "text-gray-600 dark:text-gray-400 cursor-not-allowed select-none"
                   }`}
                   title={!isManualMode ? `Nomor surat terisi otomatis (Mode ${letterNumberMode === "reset_manual" ? "Reset Manual" : "Otomatis"}). Ubah ke Mode Manual di Pengaturan Nomor Surat jika ingin mengubah nomor surat.` : ""}
                 />
-                <span className="flex-1 flex items-center justify-start px-2.5 text-gray-900 dark:text-emerald-400 font-mono text-xs border-l border-gray-200 dark:border-[#2b4533] bg-gray-50 dark:bg-[#1e3125] h-full select-none font-bold truncate">
+                <span className="min-w-0 flex-1 flex items-center justify-start px-1 text-gray-900 dark:text-emerald-400 font-mono text-[9px] border-l border-gray-200 dark:border-[#2b4533] bg-gray-50 dark:bg-[#1e3125] h-full select-none font-bold truncate">
                   {suffix}
                 </span>
               </div>
@@ -633,7 +658,7 @@ const FormView = ({
             </div>
           </div>
 
-          <div className="md:col-span-4">
+          <div className="md:col-span-3">
             <Field label="Tanggal *">
               <input
                 type="date"
@@ -697,8 +722,17 @@ const FormView = ({
           </div>
         </div>
       </div>
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setActiveFormTab("pihak")} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800">
+              Lanjut: Pihak Terlibat <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── SECTION 2: Pihak yang Terlibat ── */}
+      {activeFormTab === "pihak" && (
+        <>
       <div className="bg-white dark:bg-gradient-to-br dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-3xl shadow-xl shadow-gray-200/60 dark:shadow-none border border-gray-200/90 dark:border-[#2b4533] p-6 sm:p-7 transition-all">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-sm sm:text-base font-black tracking-wide uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
@@ -792,8 +826,20 @@ const FormView = ({
           </div>
         </div>
       </div>
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={() => setActiveFormTab("kop")} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+              <ArrowLeft className="h-3.5 w-3.5" /> Kembali: Kop
+            </button>
+            <button type="button" onClick={() => setActiveFormTab("barang")} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800">
+              Lanjut: Daftar Barang <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── SECTION 3: Daftar Barang ── */}
+      {activeFormTab === "barang" && (
+        <>
       <div className="bg-white dark:bg-gradient-to-br dark:from-[#052819] dark:via-[#073622] dark:to-[#03140d] rounded-3xl shadow-xl shadow-gray-200/60 dark:shadow-none border border-gray-200/90 dark:border-[#2b4533] p-6 sm:p-7 transition-all">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
@@ -1115,6 +1161,16 @@ const FormView = ({
           </div>
         </div>
       </div>
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={() => setActiveFormTab("pihak")} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+              <ArrowLeft className="h-3.5 w-3.5" /> Kembali: Pihak
+            </button>
+            <button type="button" onClick={handleProceedToPreview} className="lg:hidden inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800">
+              Lihat Preview <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Custom Validation Error Modal (Pop Up Formulir Belum Lengkap) */}
       {showValidationModal && typeof document !== "undefined" && createPortal(
