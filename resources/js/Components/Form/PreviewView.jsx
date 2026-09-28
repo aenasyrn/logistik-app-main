@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AlertCircle, ArrowLeft, Save, Printer } from "lucide-react";
-import WeekendWarningModal from "../Common/WeekendWarningModal";
 
 const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
 
@@ -13,36 +12,25 @@ const PreviewView = ({
   isSaving,
   isLivePreview = false,
   canProceed = true,
+  validationMessage: formValidationMessage = "Lengkapi data wajib pada formulir sebelum mencetak atau menyimpan transaksi.",
 }) => {
-  const [showWeekendModal, setShowWeekendModal] = useState(false);
-
   const handlePrint = () => {
+    if (!nomorIsValid) {
+      window.alert("Nomor surat belum diisi! Harap masukkan nomor surat terlebih dahulu untuk mencetak atau menyimpan transaksi.");
+      return;
+    }
     document.body.classList.add("print-handover-only");
     window.print();
     document.body.classList.remove("print-handover-only");
   };
 
-  const isWeekend = (dateStr) => {
-    if (!dateStr) return false;
-    const parts = String(dateStr).split("T")[0].split("-");
-    if (parts.length === 3) {
-      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      const day = d.getDay();
-      return day === 0 || day === 6;
-    }
-    const d = new Date(dateStr);
-    const day = d.getDay();
-    return day === 0 || day === 6;
-  };
-
-  const isTanggalWeekend = isWeekend(formData?.tanggal);
   const nomorSurat = String(formData?.nomorSurat || "").trim();
   const nomorIsValid = NOMOR_PATTERN.test(nomorSurat) && !/^0+$/.test(nomorSurat.split("/")[0]);
-  const isActionDisabled = isSaving || isTanggalWeekend || !nomorIsValid || (isLivePreview && !canProceed);
+  const isActionDisabled = isSaving || !nomorIsValid || (isLivePreview && !canProceed);
   const showValidationWarning = !nomorIsValid || (isLivePreview && !canProceed);
   const validationMessage = !nomorIsValid
     ? "Nomor surat belum diisi! Harap masukkan nomor surat terlebih dahulu untuk mencetak atau menyimpan transaksi."
-    : "Lengkapi data wajib pada formulir sebelum mencetak atau menyimpan transaksi.";
+    : formValidationMessage;
 
   return (
     <div className={`w-full ${isLivePreview ? "max-w-none" : "max-w-4xl mx-auto mt-6 shadow-xl"} bg-white relative print:shadow-none print:m-0 print:p-0 print:max-w-none print:bg-transparent`}>
@@ -65,11 +53,6 @@ const PreviewView = ({
           </button>
         )}
         <div className="flex items-center gap-3">
-          {isTanggalWeekend && (
-            <span className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
-              ⚠️ Hari Sabtu & Minggu tidak dapat disubmit (hanya Senin s.d. Jumat).
-            </span>
-          )}
           <button
             type="button"
             onClick={handlePrint}
@@ -80,8 +63,8 @@ const PreviewView = ({
           </button>
           <button
             onClick={() => {
-              if (isTanggalWeekend) {
-                setShowWeekendModal(true);
+              if (!nomorIsValid) {
+                window.alert("Nomor surat belum diisi! Harap masukkan nomor surat terlebih dahulu untuk mencetak atau menyimpan transaksi.");
                 return;
               }
               handleSaveTransaction();
@@ -289,13 +272,6 @@ const PreviewView = ({
         </div>
       </div>
 
-      {/* Pop Up Peringatan Hari Akhir Pekan (Tengah Halaman) */}
-      <WeekendWarningModal
-        isOpen={showWeekendModal}
-        onClose={() => setShowWeekendModal(false)}
-        title="Hari Akhir Pekan Terpilih"
-        message="Hari Sabtu & Minggu tidak dapat digunakan untuk pembuatan surat. Harap pilih tanggal pada hari kerja (Senin s.d. Jumat)."
-      />
     </div>
   );
 };

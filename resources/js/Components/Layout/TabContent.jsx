@@ -125,7 +125,7 @@ export default function TabContent({
   notificationCategoryFilter,
   setNotificationCategoryFilter,
 }) {
-  const [canSaveBastPreview, setCanSaveBastPreview] = useState(false);
+  const [bastPreviewStatus, setBastPreviewStatus] = useState({ canProceed: false, message: "Lengkapi data wajib pada formulir." });
   const has = (id) => tabs.some((t) => t.id === id);
 
   return (
@@ -202,7 +202,7 @@ export default function TabContent({
                   vendors={vendors}
                   transactions={transactions}
                   activeTransaction={activeTransaction}
-                  onValidityChange={setCanSaveBastPreview}
+                  onValidityChange={setBastPreviewStatus}
                 />
               </div>
               <div className="hidden min-w-0 lg:sticky lg:top-4 lg:col-span-6 lg:block">
@@ -214,7 +214,8 @@ export default function TabContent({
                   handleSaveTransaction={handleSaveTransaction}
                   isSaving={isSaving}
                   isLivePreview
-                  canProceed={canSaveBastPreview}
+                  canProceed={bastPreviewStatus.canProceed}
+                  validationMessage={bastPreviewStatus.message}
                 />
               </div>
             </div>

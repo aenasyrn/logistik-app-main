@@ -27,7 +27,7 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
       top desktop : AppHeader h-20 sticky dari top-0 → top-[80px] = top-20
     */
     <div
-      className="sticky z-20 bg-[#f4faf6] dark:bg-[#061910] border-b border-[#279969]/20 dark:border-[#213527] px-4 pt-2.5 flex gap-1.5 overflow-x-auto custom-scrollbar print:hidden shrink-0 transition-colors"
+      className="sticky z-20 bg-[#f4faf6] dark:bg-[#061910] border-b border-[#279969]/20 dark:border-[#213527] px-3 pt-2 flex gap-1 overflow-x-auto custom-scrollbar print:hidden shrink-0 transition-colors"
       style={{ top: "var(--tabbar-top, 128px)" }}
     >
       <style>{`
@@ -39,7 +39,7 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
         <div
           key={tab.id}
           onClick={() => handleTabClick(tab.id)}
-          className={`group flex items-center gap-2 px-4 py-2 min-w-max border-t border-x rounded-t-xl cursor-pointer transition-all select-none ${
+          className={`group flex items-center gap-1.5 px-3 py-1.5 min-w-max border-t border-x rounded-t-lg cursor-pointer transition-all select-none ${
             activeTab === tab.id
               ? "bg-[#279969]/20 dark:bg-[#279969]/30 border-[#279969]/40 dark:border-[#279969]/50 text-[#0d5c3a] dark:text-emerald-200 font-bold shadow-[0_2px_0_0_#f4faf6] dark:shadow-[0_2px_0_0_#061910]"
               : "bg-white/70 dark:bg-[#1a2b20]/40 border-gray-200/80 dark:border-transparent text-gray-500 dark:text-[#86988c] hover:bg-white dark:hover:bg-[#1a2b20]/85"
@@ -55,7 +55,7 @@ export default function TabBar({ tabs, activeTab, setActiveTab, setTabs }) {
                   : "hover:bg-gray-200 dark:hover:bg-[#2b4533] text-gray-400 dark:text-[#86988c]"
               }`}
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3 h-3" />
             </button>
           )}
         </div>

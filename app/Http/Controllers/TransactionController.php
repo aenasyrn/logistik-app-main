@@ -18,40 +18,78 @@ class TransactionController extends Controller
 {
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'id' => 'nullable|integer',
-            'nomorSurat' => 'required|string|max:255',
-            'tanggal' => 'required|date',
-            'jenisTransaksi' => 'required|string|in:Barang Masuk,Barang Keluar',
-            'penerimaNama' => 'required|string|max:255',
-            'penerimaJabatan' => 'required|string|max:255',
-            'penerimaInstansi' => 'nullable|string|max:255',
-            'pengirimNama' => 'required|string|max:255',
-            'pengirimJabatan' => 'required|string|max:255',
-            'pengirimInstansi' => 'nullable|string|max:255',
-            'mengetahuiNama' => 'required|string|max:255',
-            'mengetahuiJabatan' => 'required|string|max:255',
-            'lokasi' => 'nullable|string|max:255',
-            'items' => 'required|array|min:1',
-            'items.*.nama' => 'required|string|max:255',
-            'items.*.kuantitas' => 'required|integer|min:1',
-            'items.*.satuan' => 'required|string|max:50',
-            'items.*.sn' => 'nullable|string|max:255',
-            'items.*.keterangan' => 'nullable|string',
-            'items.*.outlet_id' => 'nullable|integer',
-            'items.*.outlet' => 'required|string|max:255',
-            'items.*.vendor' => 'nullable|string|max:255',
+        $validated = $request->validate([
+            'nomorSurat' => ['required', 'string', 'max:255', 'regex:/^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/'],
         ]);
 
-        // Pengecekan Hari Kerja (Senin - Jumat). Hari Sabtu & Minggu tidak bisa submit.
-        $dayOfWeek = (int) date('N', strtotime($data['tanggal']));
-        if ($dayOfWeek === 6 || $dayOfWeek === 7) {
-            $hari = ($dayOfWeek === 6) ? 'Sabtu' : 'Minggu';
-            return response()->json([
-                'success' => false,
-                'message' => "Surat Serah Terima tidak dapat disubmit pada hari {$hari}. Pembuatan surat hanya diperbolehkan pada hari kerja (Senin s.d. Jumat)."
-            ], 422);
+        $nullableString = static function ($value): ?string {
+            if (!is_scalar($value)) {
+                return null;
+            }
+
+            $value = trim((string) $value);
+            return $value === '' ? null : $value;
+        };
+
+        $rawDate = $request->input('tanggal');
+        $tanggal = now()->toDateString();
+        if (is_string($rawDate) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $rawDate, $dateParts)
+            && checkdate((int) $dateParts[2], (int) $dateParts[3], (int) $dateParts[1])) {
+            $tanggal = $rawDate;
         }
+
+        $requestedType = $request->input('jenisTransaksi');
+        $jenisTransaksi = in_array($requestedType, ['Barang Masuk', 'Barang Keluar'], true)
+            ? $requestedType
+            : 'Barang Keluar';
+
+        $items = [];
+        $rawItems = $request->input('items', []);
+        foreach (is_array($rawItems) ? $rawItems : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $nama = $nullableString($item['nama'] ?? null);
+            if ($nama === null) {
+                continue;
+            }
+
+            $quantity = filter_var($item['kuantitas'] ?? null, FILTER_VALIDATE_INT);
+            $quantity = max(0, $quantity === false ? 0 : $quantity);
+            $outletId = filter_var($item['outlet_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$outletId || !Outlet::whereKey($outletId)->exists()) {
+                $outletId = null;
+            }
+
+            $items[] = [
+                'nama' => $nama,
+                'kuantitas' => $quantity,
+                'satuan' => $nullableString($item['satuan'] ?? null) ?? 'Pcs',
+                'sn' => $nullableString($item['sn'] ?? null),
+                'keterangan' => $nullableString($item['keterangan'] ?? null),
+                'outlet_id' => $outletId,
+                'outlet' => $nullableString($item['outlet'] ?? null),
+                'vendor' => $nullableString($item['vendor'] ?? null),
+            ];
+        }
+
+        $data = [
+            'id' => filter_var($request->input('id'), FILTER_VALIDATE_INT) ?: null,
+            'nomorSurat' => trim($validated['nomorSurat']),
+            'tanggal' => $tanggal,
+            'jenisTransaksi' => $jenisTransaksi,
+            'penerimaNama' => $nullableString($request->input('penerimaNama')),
+            'penerimaJabatan' => $nullableString($request->input('penerimaJabatan')),
+            'penerimaInstansi' => $nullableString($request->input('penerimaInstansi')),
+            'pengirimNama' => $nullableString($request->input('pengirimNama')),
+            'pengirimJabatan' => $nullableString($request->input('pengirimJabatan')),
+            'pengirimInstansi' => $nullableString($request->input('pengirimInstansi')),
+            'mengetahuiNama' => $nullableString($request->input('mengetahuiNama')),
+            'mengetahuiJabatan' => $nullableString($request->input('mengetahuiJabatan')),
+            'lokasi' => $nullableString($request->input('lokasi')),
+            'items' => $items,
+        ];
 
         // Pengecekan Duplikat Nomor Surat (independen per jenis transaksi)
         $duplicateQuery = Transaction::where('jenis_transaksi', $data['jenisTransaksi'])
@@ -109,8 +147,8 @@ class TransactionController extends Controller
                         if ($masterMeubelair) {
                             $masterMeubelair->stok = max(0, $masterMeubelair->stok - $oldDiff);
                             $masterMeubelair->save();
-                        } elseif ($inventory) {
-                            $inventory->kuantitas = $inventory->kuantitas - $oldDiff;
+                            } elseif ($inventory) {
+                                $inventory->kuantitas = max(0, $inventory->kuantitas - $oldDiff);
                             $inventory->save();
                         }
                     }
@@ -159,20 +197,6 @@ class TransactionController extends Controller
                     $inventory = $inventories->get($item['nama']);
                     $masterMeubelair = $masterMeubelairs->get($item['nama']);
 
-                    // Verify stock availability if Barang Keluar
-                    if ($data['jenisTransaksi'] === 'Barang Keluar') {
-                        $available = 0;
-                        if ($masterMeubelair) {
-                            $available = intval($masterMeubelair->stok);
-                        } elseif ($inventory) {
-                            $available = intval($inventory->kuantitas);
-                        }
-
-                        if ($available < intval($item['kuantitas'])) {
-                            throw new \Exception("Stok barang '{$item['nama']}' tidak mencukupi (Tersedia: {$available} {$item['satuan']}, Dibutuhkan: {$item['kuantitas']} {$item['satuan']}).");
-                        }
-                    }
-
                     // Insert transaction item
                     TransactionItem::create([
                         'transaction_id' => $newTrx->id,
@@ -195,12 +219,12 @@ class TransactionController extends Controller
                         $masterMeubelair->stok = max(0, $masterMeubelair->stok + $diff);
                         $masterMeubelair->save();
                     } elseif ($inventory) {
-                        $inventory->kuantitas = $inventory->kuantitas + $diff;
+                        $inventory->kuantitas = max(0, $inventory->kuantitas + $diff);
                         $inventory->save();
-                    } else {
+                    } elseif ($diff > 0) {
                         $newInv = Inventory::create([
                             'nama' => $item['nama'],
-                            'kuantitas' => $diff > 0 ? $diff : 0,
+                            'kuantitas' => $diff,
                             'satuan' => $item['satuan'],
                             'deskripsi' => 'Dibuat otomatis dari transaksi',
                         ]);
@@ -248,7 +272,7 @@ class TransactionController extends Controller
 
                         $note = "Serah terima No: {$newTrx->nomor_surat}" . (!empty($item['keterangan']) ? " ({$item['keterangan']})" : "");
 
-                        if ($isMeubelair) {
+                        if ($isMeubelair && (int) $item['kuantitas'] > 0) {
                             $kategori = 'meubelair';
                             if ($masterMeubelair && !empty($masterMeubelair->jenis_barang)) {
                                 $kategori = strtolower(trim($masterMeubelair->jenis_barang));
@@ -271,7 +295,7 @@ class TransactionController extends Controller
                             ]);
                         }
 
-                        if ($isPrinter || $isComputer) {
+                        if (($isPrinter || $isComputer) && (int) $item['kuantitas'] > 0) {
                             $rawSn = trim($item['sn'] ?? '');
                             $snList = [];
                             if (!empty($rawSn)) {

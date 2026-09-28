@@ -2,14 +2,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { usePage } from "@inertiajs/react";
 import {
-  FileText, ArrowLeft, ArrowRight, Plus, Trash2, AlertCircle, AlertTriangle, Info,
+  FileText, ArrowLeft, ArrowRight, Plus, Trash2, AlertCircle, AlertTriangle,
   Package, PackageCheck, PackageMinus, User, Building2, Hash,
   MapPin, Calendar, ClipboardList, ChevronDown, Settings,
 } from "lucide-react";
 import CustomSelectDropdown from "./CustomSelectDropdown";
-import VendorSelectDropdown from "./VendorSelectDropdown";
 import LetterNumberSettingsModal from "./LetterNumberSettingsModal";
-import WeekendWarningModal from "../Common/WeekendWarningModal";
 import axios from "axios";
 
 const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
@@ -17,6 +15,11 @@ const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
 const isNomorValid = (nomor) => {
   if (!nomor || !NOMOR_PATTERN.test(nomor)) return false;
   return !/^0+$/.test(nomor.split("/")[0]);
+};
+
+const getItemVendor = (item) => {
+  if (typeof item?.vendor === "string") return item.vendor;
+  return item?.vendor?.nama || item?.vendor?.name || item?.vendor_nama || item?.penyedia || "";
 };
 
 // ── Komponen input field kecil dengan label & icon ──
@@ -168,7 +171,6 @@ const FormView = ({
   inventory,
   masterMeubelairs = [],
   outlets = [],
-  vendors = [],
   transactions = [],
   activeTransaction = null,
   onValidityChange = () => {},
@@ -178,13 +180,11 @@ const FormView = ({
     formData.jenisTransaksi || "Barang Keluar"
   );
   const [showValidationModal, setShowValidationModal] = useState(false);
-  const [hasSubmittedValidation, setHasSubmittedValidation] = useState(false);
-  const [vendorOption, setVendorOption] = useState("sama");
+  const hasSubmittedValidation = false;
 
   const { auth } = usePage().props;
   const isAdmin = auth?.user?.role === "admin";
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showWeekendModal, setShowWeekendModal] = useState(false);
   const [slotError, setSlotError] = useState(null);
   const [letterNumberMode, setLetterNumberMode] = useState("otomatis");
   const [activeFormTab, setActiveFormTab] = useState("kop");
@@ -402,44 +402,28 @@ const FormView = ({
   // Validation Daftar Barang (Nama Barang & Outlet Tujuan/Asal wajib diisi per baris)
   const itemsNamaValid = items.length > 0 && items.every((i) => Boolean(i.nama && i.nama.trim()));
   const itemsOutletValid = items.length > 0 && items.every((i) => Boolean(i.outlet && i.outlet.trim()));
-  const itemsVendorValid = items.length > 0 && items.every((i) => Boolean(i.vendor && i.vendor.trim()));
-  const itemsValid = itemsNamaValid && itemsOutletValid && itemsVendorValid;
+  const itemsQuantityValid = items.length > 0 && items.every((i) => Number.isInteger(Number(i.kuantitas)) && Number(i.kuantitas) >= 1);
+  const itemsValid = itemsNamaValid && itemsOutletValid && itemsQuantityValid;
 
-  const isWeekend = (dateStr) => {
-    if (!dateStr) return false;
-    const parts = String(dateStr).split("T")[0].split("-");
-    if (parts.length === 3) {
-      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      const day = d.getDay();
-      return day === 0 || day === 6;
-    }
-    const d = new Date(dateStr);
-    const day = d.getDay();
-    return day === 0 || day === 6;
-  };
-
-  const tanggalIsWeekend = isWeekend(formData.tanggal);
   const nomorIsEmpty = !formData.nomorSurat;
   const nomorIs000 = formData.nomorSurat?.startsWith("000/");
   const nomorIsValid = isNomorValid(formData.nomorSurat) && !isDuplicateNomor;
 
-  const canProceed = nomorIsValid && outletIsValid && pihakIsValid && itemsValid && !hasInvalidStock && !tanggalIsWeekend;
+  const canProceed = nomorIsValid;
+  const formValidationMessage = nomorIsValid
+    ? ""
+    : "Nomor surat belum diisi! Harap masukkan nomor surat terlebih dahulu untuk mencetak atau menyimpan transaksi.";
 
   useEffect(() => {
-    onValidityChange(canProceed);
-  }, [canProceed, onValidityChange]);
+    onValidityChange({ canProceed, message: formValidationMessage });
+  }, [canProceed, formValidationMessage, onValidityChange]);
 
   const handleProceedToPreview = () => {
-    if (tanggalIsWeekend) {
-      setShowWeekendModal(true);
+    if (!nomorIsValid) {
+      setShowValidationModal(true);
       return;
     }
-    if (canProceed) {
-      setView("preview");
-    } else {
-      setHasSubmittedValidation(true);
-      setShowValidationModal(true);
-    }
+    setView("preview");
   };
 
   return (
@@ -456,11 +440,6 @@ const FormView = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {hasInvalidStock && (
-            <span className="hidden md:flex text-[11px] text-red-700 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg font-bold items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Stok barang tidak valid / tidak cukup
-            </span>
-          )}
           {hasSubmittedValidation && !canProceed && (
             <div className="hidden xl:flex items-center gap-2">
               {isDuplicateNomor ? (
@@ -487,9 +466,9 @@ const FormView = ({
                 <span className="text-[11px] font-extrabold text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 px-3.5 py-1.5 rounded-xl border border-red-200 dark:border-red-800 flex items-center gap-1.5 shadow-2xs">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Outlet {isKeluar ? "tujuan" : "asal"} pada daftar barang wajib diisi
                 </span>
-              ) : !itemsVendorValid ? (
+              ) : !itemsQuantityValid ? (
                 <span className="text-[11px] font-extrabold text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 px-3.5 py-1.5 rounded-xl border border-red-200 dark:border-red-800 flex items-center gap-1.5 shadow-2xs">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Vendor barang wajib diisi
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> QTY setiap barang minimal 1
                 </span>
               ) : null}
             </div>
@@ -630,7 +609,7 @@ const FormView = ({
                   {suffix}
                 </span>
               </div>
-              {slotError && !tanggalIsWeekend && (
+              {slotError && (
                 <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-1 font-bold items-center gap-1">
                   <AlertTriangle className="w-3 h-3 shrink-0" /> {slotError}
                 </span>
@@ -672,11 +651,6 @@ const FormView = ({
                 }}
                 className={inputCls}
               />
-              {tanggalIsWeekend && (
-                <span className="text-[10px] text-red-600 dark:text-red-400 block mt-1 font-bold items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" /> Hari Sabtu & Minggu tidak dapat disubmit (hanya Senin s.d. Jumat).
-                </span>
-              )}
             </Field>
           </div>
         </div>
@@ -879,7 +853,7 @@ const FormView = ({
                     Nama Barang <span className="text-red-500 font-black text-sm ml-0.5">*</span>
                   </th>
                   <th className="px-3 py-3.5 font-extrabold text-gray-900 dark:text-slate-100 w-[15%]">S/N</th>
-                  <th className="px-3 py-3.5 text-center font-extrabold text-gray-900 dark:text-slate-100 w-20">Qty</th>
+                  <th className="px-3 py-3.5 text-center font-extrabold text-gray-900 dark:text-slate-100 w-24 min-w-[6rem]">Qty</th>
                   <th className="px-3 py-3.5 font-extrabold text-gray-900 dark:text-slate-100 w-28">Satuan</th>
                   <th className="px-3 py-3.5 font-extrabold text-gray-900 dark:text-slate-100 w-[20%]">
                     {isKeluar ? "Outlet Tujuan" : "Outlet Asal"} <span className="text-red-500 font-black text-sm ml-0.5">*</span>
@@ -900,10 +874,22 @@ const FormView = ({
                     <td className="px-2 py-2">
                       <BarangSelectDropdown
                         value={item.nama || ""}
-                        onChange={(val) => handleItemChange(item.id, "nama", val)}
+                        onChange={(val) => {
+                          const normalizedName = val.trim().toLowerCase();
+                          const masterItem = [...(inventory || []), ...(masterMeubelairs || [])].find((entry) =>
+                            (entry.nama || entry.nama_barang || entry.jenis || "").trim().toLowerCase() === normalizedName
+                          );
+                          handleItemChange(item.id, {
+                            nama: val,
+                            vendor: masterItem ? getItemVendor(masterItem) : "",
+                          });
+                        }}
                         onSelect={(inv) => {
-                          handleItemChange(item.id, "nama", inv.nama);
-                          if (inv.satuan) handleItemChange(item.id, "satuan", inv.satuan);
+                          handleItemChange(item.id, {
+                            nama: inv.nama,
+                            satuan: inv.satuan || item.satuan,
+                            vendor: getItemVendor(inv),
+                          });
                         }}
                         inventory={inventory}
                         masterMeubelairs={masterMeubelairs}
@@ -944,14 +930,17 @@ const FormView = ({
                         placeholder="Serial number"
                       />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="w-24 min-w-[6rem] px-2 py-2">
                       <input
                         type="number"
                         min="1"
                         value={item.kuantitas}
                         onChange={(e) => handleItemChange(item.id, "kuantitas", e.target.value)}
-                        className="w-full text-xs text-center px-2 py-2 border border-transparent hover:border-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-md bg-transparent focus:bg-white transition-all outline-none dark:focus:bg-[#0f1712] dark:hover:border-[#2b4533] dark:text-[#f1f5f3] dark:focus:text-white"
+                        className={`w-full min-w-[4.5rem] text-sm text-center px-2 py-2 border rounded-md bg-white transition-all outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:bg-[#0f1712] dark:text-[#f1f5f3] dark:focus:text-white ${hasSubmittedValidation && (!Number.isInteger(Number(item.kuantitas)) || Number(item.kuantitas) < 1) ? "border-red-500" : "border-gray-200 dark:border-[#2b4533]"}`}
                       />
+                      {hasSubmittedValidation && (!Number.isInteger(Number(item.kuantitas)) || Number(item.kuantitas) < 1) && (
+                        <span className="mt-1 block text-center text-[10px] font-semibold text-red-500">Min. 1</span>
+                      )}
                       {isKeluar && item.nama && (() => {
                         const invItem = inventory.find(i => i.nama === item.nama);
                         if (invItem && invItem.kuantitas > 0 && Number(item.kuantitas) > invItem.kuantitas) {
@@ -1040,125 +1029,6 @@ const FormView = ({
               unit
             </p>
           </div>
-
-          {/* Sub-Section Vendor Barang (Sesuai Baris Barang) */}
-          <div className="mt-7 pt-6 border-t border-gray-200 dark:border-[#2b4533] space-y-4 px-1.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
-              <h4 className="text-xs font-black tracking-wider uppercase text-gray-900 dark:text-slate-100 flex items-center gap-1">
-                Vendor Barang <span className="text-red-500 font-black text-xs ml-0.5">*</span>
-              </h4>
-              <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs mr-1">
-                <Info className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                Internal logistik (tidak tampil di preview cetak)
-              </span>
-            </div>
-
-            {/* Opsi Pilihan Mode Vendor jika barang > 1 */}
-            {items.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/90 dark:bg-[#142219] rounded-2xl border border-gray-200 dark:border-[#243a2b] max-w-fit">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVendorOption("sama");
-                    const commonVendor = items[0]?.vendor || "";
-                    items.forEach((i) => handleItemChange(i.id, "vendor", commonVendor));
-                  }}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-2xs flex items-center gap-2 ${
-                    vendorOption === "sama"
-                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                      : "bg-white dark:bg-[#16231a] text-gray-600 dark:text-slate-300 hover:text-gray-900 border border-gray-200 dark:border-[#2b4533]"
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${vendorOption === "sama" ? "bg-white animate-pulse" : "bg-gray-400"}`} />
-                  Vendor Sama (Semua Barang)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVendorOption("berbeda")}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-2xs flex items-center gap-2 ${
-                    vendorOption === "berbeda"
-                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                      : "bg-white dark:bg-[#16231a] text-gray-600 dark:text-slate-300 hover:text-gray-900 border border-gray-200 dark:border-[#2b4533]"
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${vendorOption === "berbeda" ? "bg-white animate-pulse" : "bg-gray-400"}`} />
-                  Vendor Berbeda (Per Baris Barang)
-                </button>
-              </div>
-            )}
-
-            {/* Mode 1: Vendor Sama (Semua barang mengisi vendor yang sama) */}
-            {items.length > 1 && vendorOption === "sama" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="bg-gray-50/80 dark:bg-[#16231a] p-3.5 rounded-2xl border border-gray-200/90 dark:border-[#2b4533] space-y-1.5 transition-all">
-                  <label className="text-xs font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
-                    <span>
-                      Vendor Barang (Semua Barang) <span className="text-red-500 font-black text-xs ml-0.5">*</span>
-                    </span>
-                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      ({items.length} Barang)
-                    </span>
-                  </label>
-                  <VendorSelectDropdown
-                    value={items[0]?.vendor || ""}
-                    onChange={(val) => {
-                      items.forEach((i) => handleItemChange(i.id, "vendor", val));
-                    }}
-                    onSelect={(v) => {
-                      items.forEach((i) => handleItemChange(i.id, "vendor", v.nama));
-                    }}
-                    vendors={vendors}
-                    placeholder="Pilih atau ketik nama vendor untuk semua barang..."
-                    error={hasSubmittedValidation && !items[0]?.vendor?.trim()}
-                    openUpward={true}
-                  />
-                  {hasSubmittedValidation && !items[0]?.vendor?.trim() && (
-                    <span className="text-[10px] text-red-500 dark:text-red-400 block mt-1 font-semibold">
-                      Wajib diisi <span className="text-red-500 font-black">*</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* Mode 2: Vendor Berbeda per Baris Barang (atau barang hanya 1) */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {items.map((item, idx) => {
-                  const vendorInvalid = hasSubmittedValidation && !item.vendor?.trim();
-                  return (
-                    <div
-                      key={item.id}
-                      className="bg-gray-50/80 dark:bg-[#16231a] p-3.5 rounded-2xl border border-gray-200/90 dark:border-[#2b4533] space-y-1.5 transition-all"
-                    >
-                      <label className="text-xs font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
-                        <span>
-                          Vendor Baris {idx + 1} <span className="text-red-500 font-black text-xs ml-0.5">*</span>
-                        </span>
-                        {item.nama ? (
-                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate max-w-[180px]">
-                            ({item.nama})
-                          </span>
-                        ) : null}
-                      </label>
-                      <VendorSelectDropdown
-                        value={item.vendor || ""}
-                        onChange={(val) => handleItemChange(item.id, "vendor", val)}
-                        onSelect={(v) => handleItemChange(item.id, "vendor", v.nama)}
-                        vendors={vendors}
-                        placeholder={`Pilih atau ketik vendor barang baris ${idx + 1}...`}
-                        error={vendorInvalid}
-                        openUpward={true}
-                      />
-                      {vendorInvalid && (
-                        <span className="text-[10px] text-red-500 dark:text-red-400 block mt-1 font-semibold">
-                          Wajib diisi <span className="text-red-500 font-black">*</span>
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       </div>
           <div className="flex items-center justify-between gap-3">
@@ -1186,9 +1056,9 @@ const FormView = ({
               <div className="w-14 h-14 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mb-4 border border-red-100 dark:border-red-900/40">
                 <AlertTriangle className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-black text-gray-900 dark:text-slate-100 mb-2">Formulir Belum Lengkap</h3>
+              <h3 className="text-lg font-black text-gray-900 dark:text-slate-100 mb-2">Nomor Surat Belum Valid</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-6 font-medium">
-                Harap lengkapi semua field input yang wajib diisi sebelum lanjut ke preview dokumen.
+                Harap isi nomor surat yang valid sebelum lanjut ke preview dokumen.
               </p>
               <button
                 type="button"
@@ -1219,13 +1089,6 @@ const FormView = ({
         />
       )}
 
-      {/* Pop Up Peringatan Hari Akhir Pekan (Tengah Halaman) */}
-      <WeekendWarningModal
-        isOpen={showWeekendModal}
-        onClose={() => setShowWeekendModal(false)}
-        title="Hari Akhir Pekan Terpilih"
-        message="Hari Sabtu & Minggu tidak dapat digunakan untuk pembuatan surat. Harap pilih tanggal pada hari kerja (Senin s.d. Jumat)."
-      />
     </div>
   );
 };
