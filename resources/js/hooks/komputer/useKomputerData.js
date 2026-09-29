@@ -108,14 +108,19 @@ export function useKomputerData(initialComputers = [], initialOutlets = [], init
   };
 
   const handleProdukChange = (e) => {
-    const val = (typeof e === "object" && e !== null && e.target)
+    const isObj = typeof e === "object" && e !== null;
+    const rawInv = isObj && (e.raw || (e.id && (e.nama || e.produk) ? e : null));
+    const val = isObj && e.target
       ? e.target.value
-      : (typeof e === "object" && e !== null ? (e.nama || e.value || e.label || "") : (e || ""));
+      : (isObj ? (e.nama || e.value || e.label || "") : (e || ""));
 
     const strVal = String(val).trim();
-    const itemMaster = inventoryList.find(
-      (inv) => (inv.nama && inv.nama.toLowerCase() === strVal.toLowerCase()) || String(inv.id) === strVal
-    );
+    // Prioritize exact match by ID if an item object was selected, avoiding duplicate-name collision
+    const itemMaster = rawInv?.id
+      ? inventoryList.find((inv) => String(inv.id) === String(rawInv.id))
+      : inventoryList.find(
+          (inv) => String(inv.id) === strVal || (inv.nama && inv.nama.toLowerCase() === strVal.toLowerCase())
+        );
 
     crud.setFormData((prev) => {
       const updated = {

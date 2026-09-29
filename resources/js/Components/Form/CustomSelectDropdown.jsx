@@ -38,7 +38,7 @@ export default function CustomSelectDropdown({
     }
   }, [value, defaultValue]);
 
-  // Normalize options array into [{ label, value, subtext, raw }]
+  // Normalize options array into [{ label, value, subtext, spk, vendor, stok, raw }]
   const normalizedOptions = (options || []).map((opt) => {
     if (typeof opt === "string" || typeof opt === "number") {
       return { label: String(opt), value: String(opt), raw: opt };
@@ -47,7 +47,20 @@ export default function CustomSelectDropdown({
     const lbl = opt.label !== undefined ? String(opt.label) : String(opt.nama || opt.value || "");
     const code = opt.code || opt.kode || opt.kode_outlet || "";
     const subtext = opt.subtext || (code ? `Kode: ${code}` : "");
-    return { label: lbl, value: val, subtext, raw: opt };
+    const rawObj = opt.raw || opt;
+    const spk = opt.spk || rawObj?.no_spk || rawObj?.nomor_spk || rawObj?.spk || "";
+    const vendor = opt.vendor || rawObj?.vendor_nama || rawObj?.vendor || rawObj?.penyedia || "";
+    const stok = opt.stok !== undefined ? opt.stok : (rawObj?.kuantitas !== undefined ? rawObj?.kuantitas : rawObj?.stok);
+
+    return {
+      label: lbl,
+      value: val,
+      subtext,
+      spk: spk ? String(spk) : "",
+      vendor: vendor ? String(vendor) : "",
+      stok: stok !== undefined && stok !== null ? String(stok) : null,
+      raw: rawObj,
+    };
   });
 
   const displayVal = internalVal || "";
@@ -62,7 +75,9 @@ export default function CustomSelectDropdown({
     return (
       opt.label.toLowerCase().includes(q) ||
       opt.value.toLowerCase().includes(q) ||
-      (opt.subtext && opt.subtext.toLowerCase().includes(q))
+      (opt.subtext && opt.subtext.toLowerCase().includes(q)) ||
+      (opt.spk && opt.spk.toLowerCase().includes(q)) ||
+      (opt.vendor && opt.vendor.toLowerCase().includes(q))
     );
   });
 
@@ -187,6 +202,8 @@ export default function CustomSelectDropdown({
     >
       {filtered.map((opt, idx) => {
         const isSelected = internalVal === opt.value || internalVal === opt.label;
+        const hasBadges = Boolean(opt.spk || opt.vendor || (opt.stok !== null && opt.stok !== undefined));
+
         return (
           <div
             key={opt.value + "-" + idx}
@@ -194,17 +211,37 @@ export default function CustomSelectDropdown({
               e.preventDefault();
               handleSelectOption(opt);
             }}
-            className={`p-3 hover:bg-[#1b7e47]/10 dark:hover:bg-[#1a2b20] cursor-pointer transition-colors flex items-center justify-between gap-3 ${
-              isSelected ? "bg-[#1b7e47]/15 dark:bg-[#1a2b20] font-bold text-[#1b7e47] dark:text-emerald-300" : "text-gray-900 dark:text-slate-100"
+            className={`p-3 cursor-pointer transition-colors flex items-center justify-between gap-3 ${
+              isSelected
+                ? "bg-emerald-100/70 dark:bg-emerald-950/60 font-bold text-emerald-900 dark:text-emerald-200 border-l-4 border-emerald-600"
+                : "hover:bg-emerald-50/70 dark:hover:bg-[#1a2b20] text-gray-900 dark:text-slate-100"
             }`}
           >
             <div className="min-w-0 flex-1">
               <div className="font-bold text-xs leading-snug break-words">{opt.label}</div>
-              {opt.subtext && (
+              {hasBadges ? (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {opt.spk && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      SPK: {opt.spk}
+                    </span>
+                  )}
+                  {opt.vendor && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      {opt.vendor}
+                    </span>
+                  )}
+                  {opt.stok !== null && opt.stok !== undefined && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                      Stok: {opt.stok}
+                    </span>
+                  )}
+                </div>
+              ) : opt.subtext ? (
                 <div className="text-[11px] text-gray-500 dark:text-slate-400 font-medium mt-0.5 truncate">
                   {opt.subtext}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         );

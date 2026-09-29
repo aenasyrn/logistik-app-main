@@ -1130,7 +1130,13 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         isCustomTerbilang
       };
 
-      visitInertia('/spk-histories', { method: 'post', data: newEntry })
+      fetchJson('/spk-histories', {
+        method: 'POST',
+        data: newEntry,
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+      })
         .then((res) => {
           if (res.data && res.data.id) {
             setLoadedId(res.data.id);

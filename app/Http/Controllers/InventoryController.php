@@ -41,6 +41,8 @@ class InventoryController extends Controller
 
         $namaInput = trim($request->nama ?? '');
         $vendorInput = trim($request->vendor_nama ?? '');
+        $spkInput = trim($request->no_spk ?? '');
+        $pksInput = trim($request->no_pks ?? '');
 
         $duplicateQuery = Inventory::whereRaw('LOWER(TRIM(nama)) = ?', [strtolower($namaInput)]);
         if ($vendorInput !== '') {
@@ -51,9 +53,30 @@ class InventoryController extends Controller
             });
         }
 
+        // Pengecekan nomor SPK / PKS:
+        // Jika nomor SPK atau PKS berbeda, barang dianggap kontrak/pengadaan baru dan dapat disimpan
+        if ($spkInput !== '' && $pksInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_spk)) = ?', [strtolower($spkInput)])
+                ->whereRaw('LOWER(TRIM(no_pks)) = ?', [strtolower($pksInput)]);
+        } elseif ($spkInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_spk)) = ?', [strtolower($spkInput)]);
+        } elseif ($pksInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_pks)) = ?', [strtolower($pksInput)]);
+        } else {
+            $duplicateQuery->where(function ($q) {
+                $q->whereNull('no_spk')->orWhereRaw('TRIM(no_spk) = ""');
+            })->where(function ($q) {
+                $q->whereNull('no_pks')->orWhereRaw('TRIM(no_pks) = ""');
+            });
+        }
+
         if ($duplicateQuery->exists()) {
+            $errMsg = ($spkInput !== '' || $pksInput !== '')
+                ? 'Barang dengan nama, vendor, dan nomor SPK/PKS yang sama sudah terdaftar.'
+                : 'Barang dengan nama dan vendor yang sama sudah terdaftar.';
+
             return redirect()->back()->withErrors([
-                'nama' => 'Barang dengan nama dan vendor yang sama sudah terdaftar.'
+                'nama' => $errMsg
             ]);
         }
 
@@ -101,6 +124,8 @@ class InventoryController extends Controller
 
         $namaInput = trim($request->nama ?? '');
         $vendorInput = trim($request->vendor_nama ?? '');
+        $spkInput = trim($request->no_spk ?? '');
+        $pksInput = trim($request->no_pks ?? '');
 
         $duplicateQuery = Inventory::where('id', '!=', $id)
             ->whereRaw('LOWER(TRIM(nama)) = ?', [strtolower($namaInput)]);
@@ -112,9 +137,30 @@ class InventoryController extends Controller
             });
         }
 
+        // Pengecekan nomor SPK / PKS:
+        // Jika nomor SPK atau PKS berbeda, barang dianggap kontrak/pengadaan baru dan dapat disimpan
+        if ($spkInput !== '' && $pksInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_spk)) = ?', [strtolower($spkInput)])
+                ->whereRaw('LOWER(TRIM(no_pks)) = ?', [strtolower($pksInput)]);
+        } elseif ($spkInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_spk)) = ?', [strtolower($spkInput)]);
+        } elseif ($pksInput !== '') {
+            $duplicateQuery->whereRaw('LOWER(TRIM(no_pks)) = ?', [strtolower($pksInput)]);
+        } else {
+            $duplicateQuery->where(function ($q) {
+                $q->whereNull('no_spk')->orWhereRaw('TRIM(no_spk) = ""');
+            })->where(function ($q) {
+                $q->whereNull('no_pks')->orWhereRaw('TRIM(no_pks) = ""');
+            });
+        }
+
         if ($duplicateQuery->exists()) {
+            $errMsg = ($spkInput !== '' || $pksInput !== '')
+                ? 'Barang dengan nama, vendor, dan nomor SPK/PKS yang sama sudah terdaftar.'
+                : 'Barang dengan nama dan vendor yang sama sudah terdaftar.';
+
             return redirect()->back()->withErrors([
-                'nama' => 'Barang dengan nama dan vendor yang sama sudah terdaftar.'
+                'nama' => $errMsg
             ]);
         }
 

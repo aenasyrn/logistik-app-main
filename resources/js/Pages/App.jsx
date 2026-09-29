@@ -278,6 +278,7 @@ export default function App(props) {
     master_vendor: ["vendors"],
     form: ["masterMeubelairs", "vendors", "outlets"],
     pusat_data_barang: ["masterMeubelairs", "vendors", "outlets"],
+    pusat_data_barang: ["masterMeubelairs", "vendors", "outlets", "spkHistory", "soppHistory"],
     inventaris_mebelair: ["vendors", "outlets"],
     mebelair_meja: ["vendors", "outlets"],
     mebelair_kursi: ["vendors", "outlets"],
@@ -306,18 +307,35 @@ export default function App(props) {
       ...(activeTab.startsWith("sopp_") ? ["soppHistory"] : []),
       ...(lazyPropsByTab[activeTab] || []),
     ];
+
+    // Props that should always reload on pusat_data_barang (to keep search fresh)
+    const alwaysRefreshProps = activeTab === "pusat_data_barang"
+      ? ["spkHistory", "soppHistory"]
+      : [];
+
     const missingProps = requestedProps.filter((prop) => props[prop] === undefined);
-    const propsToLoad = missingProps.filter((prop) => !lazyRequestedRef.current.has(prop));
+    const propsToLoad = [
+      ...missingProps.filter((prop) => !lazyRequestedRef.current.has(prop)),
+      ...alwaysRefreshProps.filter((prop) => !lazyRequestedRef.current.has(prop)),
+    ].filter((v, i, arr) => arr.indexOf(v) === i); // dedupe
 
     if (propsToLoad.length > 0) {
       propsToLoad.forEach((prop) => lazyRequestedRef.current.add(prop));
       router.reload({
         only: propsToLoad,
+        onSuccess: () => {
+          // Allow re-fetch on next visit to pusat_data_barang
+          if (activeTab === "pusat_data_barang") {
+            alwaysRefreshProps.forEach((p) => lazyRequestedRef.current.delete(p));
+          }
+        },
         onError: () => propsToLoad.forEach((prop) => lazyRequestedRef.current.delete(prop)),
         onCancel: () => propsToLoad.forEach((prop) => lazyRequestedRef.current.delete(prop)),
       });
     }
   }, [activeTab, userRole, props]);
+
+
   
   // Scroll to top on active tab view change
   useEffect(() => {

@@ -40,8 +40,6 @@ export default function MasterBarang({
   const [historyInv, setHistoryInv]             = useState(null);
   const [selectedId, setSelectedId]             = useState(null);
   const [hoveredId, setHoveredId]               = useState(null);
-  const [hoveredGroupKey, setHoveredGroupKey]   = useState(null);
-  const [lastTouchedGroupKey, setLastTouchedGroupKey] = useState(null);
 
   const fileInputRef = useRef(null);
 
@@ -221,47 +219,21 @@ export default function MasterBarang({
       return matchSearch && matchStatus && matchJenis;
     });
 
-  // Calculate group total stok for each group
-  const groupTotalStokMap = {};
-  const groupCountMap = {};
-  const groupJenisMap = {};
-  const groupLatestTimeMap = {};
-
-  filteredInventory.forEach((inv) => {
-    const gKey = (inv.nama || "").trim().toLowerCase();
-    const itemTime = inv.updated_at
-      ? new Date(inv.updated_at).getTime()
-      : inv.created_at
-      ? new Date(inv.created_at).getTime()
-      : Number(inv.id || 0);
-    groupLatestTimeMap[gKey] = Math.max(groupLatestTimeMap[gKey] || 0, itemTime);
-
-    const stok = inv.kuantitas !== undefined && inv.kuantitas !== null ? Number(inv.kuantitas) : (Number(inv.stok) || 0);
-    groupTotalStokMap[gKey] = (groupTotalStokMap[gKey] || 0) + stok;
-
-    groupCountMap[gKey] = (groupCountMap[gKey] || 0) + 1;
-
-    if (!groupJenisMap[gKey]) groupJenisMap[gKey] = [];
-    const jVal = (inv.jenis_barang || "").trim();
-    if (jVal && jVal !== "-" && !groupJenisMap[gKey].includes(jVal)) {
-      groupJenisMap[gKey].push(jVal);
-    }
-  });
-
-  // Sort filteredInventory by group's latest update/creation time descending so newest/edited items appear at the VERY TOP
+  // Sort filteredInventory by latest update/creation time descending so newest/edited items appear at the VERY TOP
   const sortedInventory = [...filteredInventory].sort((a, b) => {
-    const gKeyA = (a.nama || "").trim().toLowerCase();
-    const gKeyB = (b.nama || "").trim().toLowerCase();
-
-    const timeA = groupLatestTimeMap[gKeyA] || 0;
-    const timeB = groupLatestTimeMap[gKeyB] || 0;
+    const timeA = a.updated_at
+      ? new Date(a.updated_at).getTime()
+      : a.created_at
+      ? new Date(a.created_at).getTime()
+      : Number(a.id || 0);
+    const timeB = b.updated_at
+      ? new Date(b.updated_at).getTime()
+      : b.created_at
+      ? new Date(b.created_at).getTime()
+      : Number(b.id || 0);
 
     if (timeA !== timeB) {
-      return timeB - timeA; // Most recently created/edited group FIRST at top!
-    }
-
-    if (gKeyA !== gKeyB) {
-      return gKeyA.localeCompare(gKeyB);
+      return timeB - timeA;
     }
 
     return (b.id || 0) - (a.id || 0);
@@ -350,7 +322,6 @@ export default function MasterBarang({
       return;
     }
 
-    setLastTouchedGroupKey(namaVal);
     setCurrentPage(1);
     setIsSaving(true);
 
@@ -412,54 +383,10 @@ export default function MasterBarang({
     }
   };
 
-  // Pagination based on sortedInventory
+  // Pagination based on sortedInventory (individual rows, no merging)
   const totalPages = Math.ceil(sortedInventory.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedInventoryRaw = sortedInventory.slice(startIndex, startIndex + itemsPerPage);
-
-  // Grouping logic for rowSpan merging by Nama Barang
-  const paginatedInventory = [];
-  let currentGroupValue = null;
-  let currentGroupStartIndex = -1;
-  let visualNoCounter = startIndex + 1;
-
-  for (let i = 0; i < paginatedInventoryRaw.length; i++) {
-    const item = paginatedInventoryRaw[i];
-    const groupKey = (item.nama || "").trim().toLowerCase();
-    const jenisList = groupJenisMap[groupKey] || [];
-    const displayJenis = jenisList.length > 0 ? jenisList.join(", ") : (item.jenis_barang || "-");
-
-    if (groupKey === "" || groupKey !== currentGroupValue) {
-      currentGroupValue = groupKey;
-      currentGroupStartIndex = paginatedInventory.length;
-
-      paginatedInventory.push({
-        ...item,
-        _groupKey: groupKey,
-        _rowSpan: 1,
-        _isFirstInGroup: true,
-        _groupVisualNo: visualNoCounter++,
-        _isEvenGroup: (visualNoCounter - 1) % 2 === 0,
-        _groupTotalStok: groupTotalStokMap[groupKey] !== undefined ? groupTotalStokMap[groupKey] : (item.kuantitas || item.stok || 0),
-        _groupSpkCount: groupCountMap[groupKey] || 1,
-        _groupDisplayJenis: displayJenis,
-      });
-    } else {
-      paginatedInventory[currentGroupStartIndex]._rowSpan += 1;
-
-      paginatedInventory.push({
-        ...item,
-        _groupKey: groupKey,
-        _rowSpan: 0,
-        _isFirstInGroup: false,
-        _groupVisualNo: paginatedInventory[currentGroupStartIndex]._groupVisualNo,
-        _isEvenGroup: paginatedInventory[currentGroupStartIndex]._isEvenGroup,
-        _groupTotalStok: groupTotalStokMap[groupKey] !== undefined ? groupTotalStokMap[groupKey] : (item.kuantitas || item.stok || 0),
-        _groupSpkCount: groupCountMap[groupKey] || 1,
-        _groupDisplayJenis: displayJenis,
-      });
-    }
-  }
+  const paginatedInventory = sortedInventory.slice(startIndex, startIndex + itemsPerPage);
 
   const getVisiblePages = () => {
     const maxVisible = 5;
@@ -694,17 +621,15 @@ export default function MasterBarang({
                     </td>
                   </tr>
                 ) : (
-                  paginatedInventory.map((inv) => {
+                  paginatedInventory.map((inv, idx) => {
                     const statusVal = getStatusInfo(inv);
                     const isSelected = selectedId === inv.id;
-                    const isGroupHovered = hoveredGroupKey === inv._groupKey;
-                    const isEven = inv._isEvenGroup;
+                    const visualNo = startIndex + idx + 1;
+                    const isEven = idx % 2 === 0;
 
                     let bgClass = "";
                     if (isSelected) {
                       bgClass = "bg-blue-100 text-blue-900 dark:bg-[#1f3526]";
-                    } else if (isGroupHovered) {
-                      bgClass = "bg-blue-50/70 text-gray-900 dark:bg-[#273f2f]";
                     } else {
                       bgClass = isEven ? "bg-slate-50/80 text-gray-800" : "bg-white text-gray-800";
                     }
@@ -712,42 +637,34 @@ export default function MasterBarang({
                     return (
                       <tr
                         key={inv.id}
-                        onMouseEnter={() => setHoveredGroupKey(inv._groupKey)}
-                        onMouseLeave={() => setHoveredGroupKey(null)}
                         onClick={() => setSelectedId((prev) => (prev === inv.id ? null : inv.id))}
-                        className={`transition-colors duration-150 cursor-pointer ${bgClass}`}
+                        className={`transition-colors duration-150 cursor-pointer hover:bg-emerald-50/70 dark:hover:bg-[#1a2b20] ${bgClass}`}
                       >
-                        {inv._isFirstInGroup && (
-                          <td rowSpan={inv._rowSpan} className="p-2.5 border border-slate-200 text-center align-middle font-medium text-gray-500 bg-white dark:bg-[#1a2b20]">
-                            {inv._groupVisualNo}
-                          </td>
-                        )}
+                        <td className="p-2.5 border border-slate-200 text-center align-middle font-medium text-gray-500">
+                          {visualNo}
+                        </td>
 
-                        {inv._isFirstInGroup && (
-                          <td rowSpan={inv._rowSpan} className="p-2.5 border border-slate-200 align-middle font-semibold text-gray-900 bg-white dark:bg-[#1a2b20]">
-                            <div className="relative group cursor-default">
-                              <span>{inv.nama}</span>
-                              <div className="absolute left-0 top-full mt-1 z-[999] hidden group-hover:block bg-gray-900 text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl pointer-events-none">
-                                <p className="!text-gray-400 mb-0.5">Database ID</p>
-                                <p className="font-mono !text-white">{inv.id}</p>
-                              </div>
+                        <td className="p-2.5 border border-slate-200 align-middle font-semibold text-gray-900">
+                          <div className="relative group cursor-default">
+                            <span>{inv.nama}</span>
+                            <div className="absolute left-0 top-full mt-1 z-[999] hidden group-hover:block bg-gray-900 text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl pointer-events-none">
+                              <p className="!text-gray-400 mb-0.5">Database ID</p>
+                              <p className="font-mono !text-white">{inv.id}</p>
                             </div>
-                          </td>
-                        )}
+                          </div>
+                        </td>
 
-                        {inv._isFirstInGroup && (
-                          <td rowSpan={inv._rowSpan} className="p-2.5 border border-slate-200 text-center align-middle font-medium whitespace-nowrap bg-white dark:bg-[#1a2b20]">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                              inv._groupDisplayJenis?.includes("Komputer")
-                                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : inv._groupDisplayJenis?.includes("Printer")
-                                ? "bg-purple-50 text-purple-700 border border-purple-200"
-                                : "bg-gray-50 text-gray-700 border border-gray-200"
-                            }`}>
-                              {inv._groupDisplayJenis || "-"}
-                            </span>
-                          </td>
-                        )}
+                        <td className="p-2.5 border border-slate-200 text-center align-middle font-medium whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                            inv.jenis_barang?.includes("Komputer")
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : inv.jenis_barang?.includes("Printer")
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              : "bg-gray-50 text-gray-700 border border-gray-200"
+                          }`}>
+                            {inv.jenis_barang || "-"}
+                          </span>
+                        </td>
 
                         <td className="p-2.5 border border-slate-200 text-center align-middle">
                           {(() => {

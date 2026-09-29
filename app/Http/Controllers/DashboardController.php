@@ -39,7 +39,7 @@ class DashboardController extends Controller
             ...$this->meubelairProps(),
             'currentUserRole' => $user->role,
             'outlets' => Inertia::lazy(fn () => $this->orderedOutlets()),
-            'vendors' => Inertia::lazy(fn () => Vendor::orderByDesc('id')->get()),
+            'vendors' => Vendor::orderByDesc('id')->get(),
             'buildingRenovations' => Inertia::lazy(fn () => BuildingRenovation::orderByDesc('id')->get()),
             'securityFacilities' => Inertia::lazy(fn () => SecurityFacility::orderByRaw('CAST(no_urut AS UNSIGNED) ASC')->get()),
             'masterMeubelairs' => Inertia::lazy(fn () => MasterMeubelair::orderByDesc('id')->get()),

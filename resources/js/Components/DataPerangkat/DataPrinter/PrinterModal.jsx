@@ -29,20 +29,16 @@ export default function PrinterModal({
   // Prepare rich option objects for Master Barang
   const inventoryOptions = useMemo(() => {
     return (inventoryList || []).map((inv) => {
-      const subParts = [];
-      if (inv.vendor_nama || inv.vendor) subParts.push(`Vendor: ${inv.vendor_nama || inv.vendor}`);
-      if (inv.status) subParts.push(`Status: ${inv.status}`);
-      if (inv.tanggal_mulai && inv.tanggal_selesai) {
-        subParts.push(`Periode: ${inv.tanggal_mulai} s/d ${inv.tanggal_selesai}`);
-      }
-      if (inv.kuantitas !== undefined && inv.kuantitas !== null && inv.kuantitas > 0) {
-        subParts.push(`Stok: ${inv.kuantitas} ${inv.satuan || "Unit"}`);
-      }
+      const spk = inv.no_spk || inv.nomor_spk || inv.spk || "";
+      const vendor = inv.vendor_nama || inv.vendor || "";
+      const stok = inv.kuantitas !== undefined && inv.kuantitas !== null ? inv.kuantitas : 0;
       return {
         id: inv.id,
         value: inv.nama,
         label: inv.nama,
-        subtext: subParts.join(" • ") || "Master Barang",
+        spk,
+        vendor,
+        stok,
         raw: inv,
       };
     });
@@ -61,10 +57,14 @@ export default function PrinterModal({
 
   // Check if current selected product is from Master Barang
   const matchedMaster = useMemo(() => {
+    if (formData.inventory_id) {
+      const byId = (inventoryList || []).find((inv) => String(inv.id) === String(formData.inventory_id));
+      if (byId) return byId;
+    }
     if (!formData.produk) return null;
     const cleanProd = String(formData.produk).trim().toLowerCase();
     return (inventoryList || []).find((inv) => inv.nama && inv.nama.toLowerCase() === cleanProd);
-  }, [formData.produk, inventoryList]);
+  }, [formData.produk, formData.inventory_id, inventoryList]);
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
@@ -157,12 +157,22 @@ export default function PrinterModal({
 
                   {/* Indicator jika terhubung dengan Master Barang */}
                   {matchedMaster && (
-                    <div className="sm:col-span-3 bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] p-2 rounded-xl flex items-center justify-between gap-2 animate-in fade-in duration-200">
-                      <div className="flex items-center gap-1.5">
+                    <div className="sm:col-span-3 bg-emerald-50/90 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-[11px] p-2 rounded-xl flex items-center justify-between gap-2 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>
                           Terhubung Master Barang: <strong>{matchedMaster.nama}</strong>
                         </span>
+                        {(matchedMaster.no_spk || matchedMaster.nomor_spk || matchedMaster.spk) && (
+                          <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-semibold px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
+                            SPK: {matchedMaster.no_spk || matchedMaster.nomor_spk || matchedMaster.spk}
+                          </span>
+                        )}
+                        {(matchedMaster.vendor_nama || matchedMaster.vendor) && (
+                          <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-medium px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700">
+                            {matchedMaster.vendor_nama || matchedMaster.vendor}
+                          </span>
+                        )}
                       </div>
                       {matchedMaster.status && (
                         <span className="text-[10px] bg-white dark:bg-[#1a2e22] text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 shrink-0">

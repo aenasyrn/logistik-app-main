@@ -1270,7 +1270,13 @@ export default function SoppGenerator({ type, setView, activeTab, outlets = [], 
         disetujuiJabatan
       };
 
-      visitInertia('/sopp-histories', { method: 'post', data: newEntry })
+      fetchJson('/sopp-histories', {
+        method: 'POST',
+        data: newEntry,
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+      })
         .then((res) => {
           const savedId = res.data?.id || res.data?.data?.id;
           if (savedId) {
@@ -1295,6 +1301,7 @@ export default function SoppGenerator({ type, setView, activeTab, outlets = [], 
             alert(errorMsg);
           }
         });
+
     } catch (e) {
       setIsSubmitting(false);
       console.error("Failed to save SOPP history:", e);
