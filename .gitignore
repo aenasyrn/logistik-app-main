@@ -1,6 +1,7 @@
 *.log
 .agents
 .DS_Store
+.editorconfig
 .env
 .env.backup
 .env.production
