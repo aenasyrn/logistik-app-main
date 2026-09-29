@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Printer, Monitor, Laptop, Map, Key, Clock, Check, Bell, ArrowRight, AlertTriangle, Loader2, CheckCircle, Eye } from "lucide-react";
 import { router } from "@inertiajs/react";
-import axios from "axios";
+import { visitInertia } from "@/utils/inertiaRequest";
 
 // Helper to calculate months left for rental contracts
 const hitungSisaBulan = (tanggalSelesai) => {
@@ -240,10 +240,10 @@ export default function NotificationPageView({
     setIsSaving(true);
     try {
       if (confirmItem.type === "tanah") {
-        await axios.put(`/building-lands/${confirmItem.dbId}/status`, { status: "Done" });
+        await visitInertia(`/building-lands/${confirmItem.dbId}/status`, { method: "put", data: { status: "Done" } });
         router.reload({ only: ["buildingLands"] });
       } else if (confirmItem.type === "bangunan") {
-        await axios.put(`/building-sewas/${confirmItem.dbId}/status`, { status: "Done" });
+        await visitInertia(`/building-sewas/${confirmItem.dbId}/status`, { method: "put", data: { status: "Done" } });
         router.reload({ only: ["buildingSewas"] });
       }
       

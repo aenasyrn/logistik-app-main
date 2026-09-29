@@ -95,7 +95,6 @@ export default function TabContent({
   isSaving,
   setView,
   user,
-  handleUpdateRole,
   landFilter,
   setLandFilter,
   sewaFilter,
@@ -455,7 +454,7 @@ export default function TabContent({
       {has("kelola_user") && (
         <Panel id="kelola_user" activeTab={activeTab}>
           {userRole === "admin"
-            ? <KelolaAkses usersList={usersList} handleUpdateRole={handleUpdateRole} />
+            ? <KelolaAkses usersList={usersList} />
             : <AccessDenied />}
         </Panel>
       )}

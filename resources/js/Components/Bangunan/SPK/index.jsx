@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Plus, Trash2, Printer, RefreshCw, Settings } from "lucide-react";
 import { router, usePage } from "@inertiajs/react";
-import axios from "axios";
+import { fetchJson, visitInertia } from "@/utils/inertiaRequest";
 import CustomSelectDropdown from "../../Form/CustomSelectDropdown";
 import LetterNumberSettingsModal from "../../Form/LetterNumberSettingsModal";
 import WeekendWarningModal from "../../Common/WeekendWarningModal";
@@ -537,34 +537,6 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
   const [letterNumberMode, setLetterNumberMode] = useState("otomatis");
   const isManualMode = letterNumberMode === "manual";
 
-  // Auto-fetch next SPK letter number
-  const fetchNextSpkNumber = async () => {
-    try {
-      const res = await axios.get("/api/letter-numbers/next", {
-        params: { letter_type: "spk" }
-      });
-      if (res.data?.mode) {
-        setLetterNumberMode(res.data.mode);
-      }
-      if (res.data?.success && (res.data.next_number || res.data.number)) {
-        const num = res.data.next_number || res.data.number;
-        setFormData(prev => ({
-          ...prev,
-          noSuratPrefix: String(num),
-          noSurat: `${num}/00108.${currentMonthTwoDigits}/${currentYear}`
-        }));
-      }
-    } catch (err) {
-      console.error("Gagal mengambil nomor surat SPK berikutnya:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (!loadedId && !formData.noSuratPrefix) {
-      fetchNextSpkNumber();
-    }
-  }, [loadedId]);
-
   // Main form state
   const [formData, setFormData] = useState({
     noSuratPrefix: "",
@@ -647,6 +619,36 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
     isTermasukPajak: type === "elektronik" ? false : true,
     pajakStatusText: type === "elektronik" ? "" : "(Sudah Termasuk Pajak)",
   });
+
+  // Auto-fetch next SPK letter number
+  const fetchNextSpkNumber = async () => {
+    try {
+      const res = await fetchJson("/api/letter-numbers/next", {
+        params: { letter_type: "spk" },
+      });
+      const data = res.data;
+      if (data?.mode) {
+        setLetterNumberMode(data.mode);
+      }
+      if (data?.success && (data.next_number || data.number)) {
+        const num = data.next_number || data.number;
+        setFormData(prev => ({
+          ...prev,
+          noSuratPrefix: String(num),
+          noSurat: `${num}/00108.${currentMonthTwoDigits}/${currentYear}`
+        }));
+      }
+    } catch (err) {
+      if (err.cancelled) return;
+      console.error("Gagal mengambil nomor surat SPK berikutnya:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!loadedId && !formData.noSuratPrefix) {
+      fetchNextSpkNumber();
+    }
+  }, [loadedId]);
 
   // Project item details state
   const [projectUraian, setProjectUraian] = useState("");
@@ -1128,7 +1130,7 @@ export default function BangunanSPK({ type = "renovasi", setView, activeTab }) {
         isCustomTerbilang
       };
 
-      axios.post('/spk-histories', newEntry)
+      visitInertia('/spk-histories', { method: 'post', data: newEntry })
         .then((res) => {
           if (res.data && res.data.id) {
             setLoadedId(res.data.id);

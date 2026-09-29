@@ -1,5 +1,5 @@
 // resources/js/services/sewaService.js
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
@@ -99,11 +99,9 @@ export const importSewaCSV = async (rows) => {
     throw new Error("Tidak ada data valid yang cocok dengan kolom template. Pastikan header CSV sesuai.");
   }
 
-  await axios.post('/building-sewas/import', { rows: formattedRows });
+  await visitInertia('/building-sewas/import', { method: 'post', data: { rows: formattedRows } });
   return formattedRows.length;
 };
-
-export const importSewaExcel = importSewaCSV;
 
 export const downloadSewaTemplate = () => {
   const headers = [

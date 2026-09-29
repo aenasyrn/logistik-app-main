@@ -6,15 +6,24 @@ use App\Models\LetterNumberSetting;
 use App\Models\Transaction;
 use App\Models\SpkHistory;
 use App\Models\SoppHistory;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class LetterNumberController extends Controller
 {
     /**
+     * Get setting for a specific letter type as JSON.
+     */
+    public function getSettings(Request $request): JsonResponse
+    {
+        return response()->json($this->getSettingsData($request));
+    }
+
+    /**
      * Get setting for a specific letter type.
      */
-    public function getSettings(Request $request)
+    public function getSettingsData(Request $request): array
     {
         $request->validate([
             'letter_type' => 'required|string|in:serah_terima_keluar,serah_terima_masuk,spk,sopp',
@@ -28,13 +37,13 @@ class LetterNumberController extends Controller
         $currentNumberToDisplay = $nextInfo['current_number'] ?? $setting->current_number;
         $nextNumberToDisplay = $nextInfo['next_number'] ?? $nextInfo['number'] ?? null;
 
-        return response()->json([
+        return [
             'success' => true,
             'setting' => $setting,
             'current_number' => $currentNumberToDisplay,
             'next_number' => $nextNumberToDisplay,
             'next_info' => $nextInfo,
-        ]);
+        ];
     }
 
     /**
@@ -151,9 +160,17 @@ class LetterNumberController extends Controller
     }
 
     /**
+     * Get next number for letter creation as JSON.
+     */
+    public function getNext(Request $request): JsonResponse
+    {
+        return response()->json($this->getNextData($request));
+    }
+
+    /**
      * Get next number for letter creation.
      */
-    public function getNext(Request $request)
+    public function getNextData(Request $request): array
     {
         $request->validate([
             'letter_type' => 'required|string|in:serah_terima_keluar,serah_terima_masuk,spk,sopp',
@@ -166,7 +183,7 @@ class LetterNumberController extends Controller
 
         $nextInfo = $this->calculateNextNumber($type, $setting, $tanggal);
 
-        return response()->json($nextInfo);
+        return $nextInfo;
     }
 
     /**

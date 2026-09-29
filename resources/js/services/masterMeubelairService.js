@@ -1,33 +1,31 @@
 // resources/js/services/masterMeubelairService.js
-import axios from "axios";
+import { visitInertia } from "../utils/inertiaRequest";
 import { router } from "@inertiajs/react";
 import { downloadExcelTemplate } from "../utils/excelHelper";
 
 export const addMasterMeubelair = async (data) => {
-  const res = await axios.post("/master-meubelairs", data);
+  const res = await visitInertia("/master-meubelairs", { method: "post", data });
   router.reload({ only: ["masterMeubelairs", "activityLogs"] });
   return res.data;
 };
 
 export const updateMasterMeubelair = async (id, data) => {
-  const res = await axios.put(`/master-meubelairs/${id}`, data);
+  const res = await visitInertia(`/master-meubelairs/${id}`, { method: "put", data });
   router.reload({ only: ["masterMeubelairs", "activityLogs"] });
   return res.data;
 };
 
 export const deleteMasterMeubelair = async (id) => {
-  const res = await axios.delete(`/master-meubelairs/${id}`);
+  const res = await visitInertia(`/master-meubelairs/${id}`, { method: "delete" });
   router.reload({ only: ["masterMeubelairs", "activityLogs"] });
   return res.data;
 };
 
 export const importMasterMeubelairCSV = async (data) => {
-  const res = await axios.post("/master-meubelairs/import", { data });
+  const res = await visitInertia("/master-meubelairs/import", { method: "post", data: { data } });
   router.reload({ only: ["masterMeubelairs", "activityLogs"] });
   return res.data.count;
 };
-
-export const importMasterMeubelairExcel = importMasterMeubelairCSV;
 
 export const downloadMasterMeubelairTemplate = () => {
   const headers = [

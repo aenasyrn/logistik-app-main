@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { parseRobustDate } from "../utils/deviceUtils";
 import { downloadExcelTemplate } from '../utils/excelHelper';
@@ -82,12 +82,10 @@ export const importInventoryCSV = async (rows) => {
     throw new Error("Tidak ada data barang yang valid ditemukan. Periksa kembali nama header kolom CSV Anda.");
   }
 
-  await axios.post('/inventory/import', { rows: formattedRows });
+  await visitInertia('/inventory/import', { method: 'post', data: { rows: formattedRows } });
   router.reload({ only: ['inventory', 'activityLogs'] });
   return formattedRows.length;
 };
-
-export const importInventoryExcel = importInventoryCSV;
 
 /**
  * Trigger download file Excel template import.

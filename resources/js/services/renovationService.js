@@ -1,5 +1,5 @@
 // resources/js/services/renovationService.js
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
@@ -87,11 +87,9 @@ export const importRenovationCSV = async (rows) => {
     });
   }
 
-  await axios.post('/building-renovations/import', { rows: formattedRows });
+  await visitInertia('/building-renovations/import', { method: 'post', data: { rows: formattedRows } });
   return formattedRows.length;
 };
-
-export const importRenovationExcel = importRenovationCSV;
 
 export const downloadRenovationTemplate = () => {
   const headers = [

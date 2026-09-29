@@ -1,8 +1,8 @@
 // resources/js/Components/DataMaster/KelolaAreaCabangModal.jsx
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, MapPin, Building2, Loader2, AlertCircle, ChevronDown } from "lucide-react";
+import { reloadInertiaProps } from "@/utils/inertiaRequest";
 import {
-  fetchOutletAreas,
   addOutletArea,
   deleteOutletArea,
   addOutletCabang,
@@ -58,7 +58,8 @@ export default function KelolaAreaCabangModal({
 
   const loadData = async () => {
     try {
-      const data = await fetchOutletAreas();
+      const props = await reloadInertiaProps({ only: ["outletAreas"] });
+      const data = props.outletAreas || [];
       if (data && data.length > 0) {
         setAreas(data);
         if (!selectedAreaForCabang) {

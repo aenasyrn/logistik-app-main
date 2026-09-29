@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import CustomSelectDropdown from "./CustomSelectDropdown";
 import LetterNumberSettingsModal from "./LetterNumberSettingsModal";
-import axios from "axios";
+import { fetchJson } from "@/utils/inertiaRequest";
 
 const NOMOR_PATTERN = /^\d+\/[A-Za-z0-9._-]+\/04\/\d{4}$/;
 
@@ -251,7 +251,9 @@ const FormView = ({
     try {
       const typeKey = selectedJenis === "Barang Masuk" ? "serah_terima_masuk" : "serah_terima_keluar";
       const qDate = selectedDate || new Date().toISOString().split("T")[0];
-      const res = await axios.get(`/api/letter-numbers/next?letter_type=${typeKey}&tanggal=${qDate}`);
+      const res = await fetchJson("/api/letter-numbers/next", {
+        params: { letter_type: typeKey, tanggal: qDate },
+      });
       const data = res.data;
       if (data.mode) {
         setLetterNumberMode(data.mode);
@@ -276,6 +278,7 @@ const FormView = ({
         setSlotError(null);
       }
     } catch (err) {
+      if (err.cancelled) return;
       console.error("Gagal mengambil nomor surat otomatis:", err);
     }
   };

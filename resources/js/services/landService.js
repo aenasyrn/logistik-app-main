@@ -1,5 +1,5 @@
 // resources/js/services/landService.js
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
@@ -75,11 +75,9 @@ export const importLandCSV = async (rows) => {
     });
   }
 
-  const res = await axios.post('/building-lands/import', { rows: formattedRows });
+  const res = await visitInertia('/building-lands/import', { method: 'post', data: { rows: formattedRows } });
   return res.data?.imported_count ?? formattedRows.length;
 };
-
-export const importLandExcel = importLandCSV;
 
 export const downloadLandTemplate = () => {
   const headers = [

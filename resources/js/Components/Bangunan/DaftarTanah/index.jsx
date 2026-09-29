@@ -2,7 +2,7 @@
 import React, { useState, useRef } from "react";
 import { Map, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, Upload, Eye, MapPin, FileText } from "lucide-react";
 import DetailHistoryModal from "../../Common/DetailHistoryModal";
-import axios from "axios";
+import { visitInertia } from "@/utils/inertiaRequest";
 import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
 import { parseExcelFile } from "../../../utils/excelHelper";
@@ -226,7 +226,7 @@ export default function DaftarTanah({ userRole, lands = [], outlets = [], landFi
     setLocalStatuses(prev => ({ ...prev, [id]: newStatus }));
 
     try {
-      await axios.put(`/building-lands/${id}/status`, { status: newStatus });
+      await visitInertia(`/building-lands/${id}/status`, { method: "put", data: { status: newStatus } });
       router.reload({
         only: ["buildingLands", "activityLogs"],
         onSuccess: () => {
@@ -972,16 +972,16 @@ export default function DaftarTanah({ userRole, lands = [], outlets = [], landFi
                 <col className="w-[150px]" />
                 <col className="w-[220px]" />
                 <col className="w-[120px]" />
-                <col className="w-[80px]" /> {/* Sisa Waktu */}
-                <col className="w-[150px]" /> {/* Status */}
+                <col className="w-[80px]" />
+                <col className="w-[150px]" />
                 <col className="w-[110px]" />
                 <col className="w-[110px]" />
                 <col className="w-[110px]" />
                 <col className="w-[120px]" />
                 <col className="w-[110px]" />
                 <col className="w-[140px]" />
-                <col className="w-[100px]" /> {/* Mulai */}
-                <col className="w-[100px]" /> {/* Berakhir */}
+                <col className="w-[100px]" />
+                <col className="w-[100px]" />
                 <col className="w-[90px]" />
                 <col className="w-[110px]" />
                 <col className="w-[110px]" />

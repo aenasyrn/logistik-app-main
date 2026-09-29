@@ -1,5 +1,5 @@
 // resources/js/services/meubelairService.js
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
@@ -7,7 +7,7 @@ import { downloadExcelTemplate } from '../utils/excelHelper';
  * Tambah satu data meubelair (meja/kursi/lemari).
  */
 export const addMeubelair = async (formData) => {
-  const response = await axios.post('/meubelairs', formData);
+  const response = await visitInertia('/meubelairs', { method: 'post', data: formData });
   router.reload({ only: ['meubelairs', 'activityLogs'] });
   return response.data;
 };
@@ -16,7 +16,7 @@ export const addMeubelair = async (formData) => {
  * Perbarui data meubelair berdasarkan id.
  */
 export const updateMeubelair = async (id, formData) => {
-  const response = await axios.put(`/meubelairs/${id}`, formData);
+  const response = await visitInertia(`/meubelairs/${id}`, { method: 'put', data: formData });
   router.reload({ only: ['meubelairs', 'activityLogs'] });
   return response.data;
 };
@@ -25,16 +25,8 @@ export const updateMeubelair = async (id, formData) => {
  * Hapus data meubelair berdasarkan id.
  */
 export const deleteMeubelair = async (id) => {
-  const response = await axios.delete(`/meubelairs/${id}`);
+  const response = await visitInertia(`/meubelairs/${id}`, { method: 'delete' });
   router.reload({ only: ['meubelairs', 'activityLogs'] });
-  return response.data;
-};
-
-/**
- * Dapatkan daftar jenis barang meubelair
- */
-export const fetchJenisMeubelair = async () => {
-  const response = await axios.get('/jenis-meubelairs');
   return response.data;
 };
 
@@ -42,7 +34,7 @@ export const fetchJenisMeubelair = async () => {
  * Tambah jenis barang meubelair baru (khusus admin)
  */
 export const addJenisMeubelair = async (nama) => {
-  const response = await axios.post('/jenis-meubelairs', { nama });
+  const response = await visitInertia('/jenis-meubelairs', { method: 'post', data: { nama } });
   router.reload({ only: ['jenisMeubelairs'] });
   return response.data;
 };
@@ -51,7 +43,7 @@ export const addJenisMeubelair = async (nama) => {
  * Hapus jenis barang meubelair (khusus admin)
  */
 export const deleteJenisMeubelair = async (id) => {
-  const response = await axios.delete(`/jenis-meubelairs/${id}`);
+  const response = await visitInertia(`/jenis-meubelairs/${id}`, { method: 'delete' });
   router.reload({ only: ['jenisMeubelairs'] });
   return response.data;
 };
@@ -165,16 +157,14 @@ export const importMeubelairCSV = async (defaultKategori, rows) => {
     throw new Error(`Tidak ada data ${kategori} yang valid ditemukan. Periksa kembali kolom CSV Anda.`);
   }
 
-  const response = await axios.post('/meubelairs/import', {
-    kategori,
-    rows: formattedRows,
+  const response = await visitInertia('/meubelairs/import', {
+    method: 'post',
+    data: { kategori, rows: formattedRows },
   });
 
   router.reload({ only: ['meubelairs', 'activityLogs'] });
   return response.data;
 };
-
-export const importMeubelairExcel = importMeubelairCSV;
 
 /**
  * Trigger download file Excel template import.

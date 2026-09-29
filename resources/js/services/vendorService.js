@@ -1,12 +1,10 @@
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
 export const importVendorCSV = async (data) => {
-  const res = await axios.post('/vendors/import', { data });
+  const res = await visitInertia('/vendors/import', { method: 'post', data: { data } });
   return typeof res.data?.total === 'number' ? res.data.total : data.length;
 };
-
-export const importVendorExcel = importVendorCSV;
 
 export const downloadVendorTemplate = () => {
   const headers = ["Nama Perusahaan", "Pimpinan", "Jabatan", "Bidang", "Sertifikat DRM", "Masa Berlaku Awal", "Masa Berlaku Akhir", "Kota", "No Telpon", "Alamat"];

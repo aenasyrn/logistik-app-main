@@ -4,7 +4,6 @@ import { MapPin, X, Edit, Plus, Loader2, Settings, Building2 } from "lucide-reac
 import { router } from "@inertiajs/react";
 import CustomSelectDropdown from "../Form/CustomSelectDropdown";
 import KelolaAreaCabangModal from "./KelolaAreaCabangModal";
-import { fetchOutletAreas } from "../../services/outletAreaService";
 
 const PREDEFINED_AREAS = [
   "AREA SENEN",
@@ -110,10 +109,6 @@ export default function OutletFormModal({
   useEffect(() => {
     if (outletAreas && outletAreas.length > 0) {
       setLocalAreas(outletAreas);
-    } else if (isOpen) {
-      fetchOutletAreas().then((res) => {
-        if (res && res.length > 0) setLocalAreas(res);
-      }).catch(() => {});
     }
   }, [outletAreas, isOpen]);
 
@@ -457,12 +452,7 @@ export default function OutletFormModal({
           onClose={() => setIsKelolaOpen(false)}
           initialTab={kelolaInitialTab}
           initialAreas={localAreas.length > 0 ? localAreas : outletAreas}
-          onAreasUpdated={() => {
-            fetchOutletAreas().then((res) => {
-              if (res && res.length > 0) setLocalAreas(res);
-            }).catch(() => {});
-            router.reload({ only: ["outletAreas"] });
-          }}
+          onAreasUpdated={() => router.reload({ only: ["outletAreas"] })}
         />
       )}
     </>

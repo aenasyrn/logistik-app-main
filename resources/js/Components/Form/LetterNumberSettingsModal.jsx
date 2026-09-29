@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Settings, RefreshCw, Check, AlertCircle, X, Shield, Calendar, Hash, PackageMinus, PackageCheck } from "lucide-react";
-import axios from "axios";
+import { fetchJson, visitInertia } from "@/utils/inertiaRequest";
 
 export default function LetterNumberSettingsModal({
   isOpen,
@@ -54,7 +54,7 @@ export default function LetterNumberSettingsModal({
     setError(null);
     try {
       const queryDate = activeTanggal || new Date().toISOString().split("T")[0];
-      const res = await axios.get("/api/letter-numbers/settings", {
+      const res = await fetchJson("/api/letter-numbers/settings", {
         params: { letter_type: activeType, tanggal: queryDate },
       });
       const data = res.data;
@@ -86,6 +86,7 @@ export default function LetterNumberSettingsModal({
         setError(data.message || "Gagal memuat pengaturan nomor surat.");
       }
     } catch (err) {
+      if (err.cancelled) return;
       console.error("Error loading settings:", err);
       setError(err.response?.data?.message || "Gagal memuat pengaturan nomor surat.");
     } finally {
@@ -126,11 +127,14 @@ export default function LetterNumberSettingsModal({
     setError(null);
     setMessage(null);
     try {
-      const res = await axios.post("/api/letter-numbers/settings", {
+      const res = await visitInertia("/api/letter-numbers/settings", {
+        method: "post",
+        data: {
         letter_type: activeType,
         mode,
         manual_start_number: mode === "manual" ? parseInt(manualStartNumber, 10) || 1 : undefined,
         current_number: mode === "manual" ? Math.max(0, (parseInt(manualStartNumber, 10) || 1) - 1) : undefined,
+        },
       });
       const data = res.data;
       if (data.success) {
@@ -169,8 +173,9 @@ export default function LetterNumberSettingsModal({
     setError(null);
     setMessage(null);
     try {
-      const res = await axios.post("/api/letter-numbers/reset", {
-        letter_type: activeType,
+      const res = await visitInertia("/api/letter-numbers/reset", {
+        method: "post",
+        data: { letter_type: activeType },
       });
       const data = res.data;
       if (data.success) {

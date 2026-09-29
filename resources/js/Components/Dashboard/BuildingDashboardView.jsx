@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertTriangle, FileText, Handshake,
   BarChart3, TrendingUp, Loader2, CheckCircle
 } from "lucide-react";
-import axios from "axios";
+import { visitInertia } from "@/utils/inertiaRequest";
 import { router } from "@inertiajs/react";
 
 export default function BuildingDashboardView({
@@ -181,10 +181,10 @@ export default function BuildingDashboardView({
     setIsSaving(true);
     try {
       if (confirmItem.type === "tanah") {
-        await axios.put(`/building-lands/${confirmItem.id}/status`, { status: "Done" });
+        await visitInertia(`/building-lands/${confirmItem.id}/status`, { method: "put", data: { status: "Done" } });
         router.reload({ only: ["buildingLands"] });
       } else if (confirmItem.type === "sewa") {
-        await axios.put(`/building-sewas/${confirmItem.id}/status`, { status: "Done" });
+        await visitInertia(`/building-sewas/${confirmItem.id}/status`, { method: "put", data: { status: "Done" } });
         router.reload({ only: ["buildingSewas"] });
       }
 

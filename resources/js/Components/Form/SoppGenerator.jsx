@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { flushSync, createPortal } from "react-dom";
 import { ArrowLeft, Printer, Plus, Trash2, ClipboardList, ArrowUp, ArrowDown, GripVertical, Settings } from "lucide-react";
 import { router, usePage } from "@inertiajs/react";
-import axios from "axios";
+import { fetchJson, visitInertia } from "@/utils/inertiaRequest";
 import VendorSelectDropdown from "./VendorSelectDropdown";
 import CustomSelectDropdown from "./CustomSelectDropdown";
 import LetterNumberSettingsModal from "./LetterNumberSettingsModal";
@@ -473,16 +473,18 @@ export default function SoppGenerator({ type, setView, activeTab, outlets = [], 
 
   const fetchNextSoppNumber = async () => {
     try {
-      const res = await axios.get("/api/letter-numbers/next", {
-        params: { letter_type: "sopp" }
+      const res = await fetchJson("/api/letter-numbers/next", {
+        params: { letter_type: "sopp" },
       });
-      if (res.data?.mode) {
-        setLetterNumberMode(res.data.mode);
+      const data = res.data;
+      if (data?.mode) {
+        setLetterNumberMode(data.mode);
       }
-      if (res.data?.success && (res.data.next_number || res.data.number)) {
-        setNomorUrut(String(res.data.next_number || res.data.number));
+      if (data?.success && (data.next_number || data.number)) {
+        setNomorUrut(String(data.next_number || data.number));
       }
     } catch (err) {
+      if (err.cancelled) return;
       console.error("Gagal mengambil nomor surat SOPP berikutnya:", err);
     }
   };
@@ -1268,7 +1270,7 @@ export default function SoppGenerator({ type, setView, activeTab, outlets = [], 
         disetujuiJabatan
       };
 
-      axios.post('/sopp-histories', newEntry)
+      visitInertia('/sopp-histories', { method: 'post', data: newEntry })
         .then((res) => {
           const savedId = res.data?.id || res.data?.data?.id;
           if (savedId) {

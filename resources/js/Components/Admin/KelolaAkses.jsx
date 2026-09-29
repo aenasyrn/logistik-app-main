@@ -6,10 +6,9 @@ import {
   X, Mail, Lock, User as UserIcon, AlertTriangle, CheckCircle2,
   Eye, EyeOff, ShieldCheck, AlertCircle
 } from "lucide-react";
-import axios from "axios";
 import { router } from "@inertiajs/react";
 
-export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
+export default function KelolaAkses({ usersList = [] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
 
@@ -103,74 +102,62 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
   };
 
   // Handle submit form (Add or Edit)
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setFormErrors({});
 
     if (formData.password && formData.password !== formData.password_confirmation) {
-      setFormErrors({ password_confirmation: ["Konfirmasi password baru tidak cocok dengan password baru!"] });
+      setFormErrors({ password_confirmation: "Konfirmasi password baru tidak cocok dengan password baru!" });
       return;
     }
 
     setIsSaving(true);
-    setFormErrors({});
+    const options = {
+      preserveScroll: true,
+      onSuccess: () => {
+        showToast(editingUser ? "Data user berhasil diperbarui!" : "User baru berhasil ditambahkan!");
+        setIsModalOpen(false);
+      },
+      onError: (errors) => setFormErrors(errors),
+      onFinish: () => setIsSaving(false),
+    };
 
-    try {
-      if (editingUser) {
-        // Edit existing user
-        await axios.put(`/users/${editingUser.id}`, formData);
-        showToast("Data user berhasil diperbarui!");
-      } else {
-        // Add new user
-        await axios.post("/users", formData);
-        showToast("User baru berhasil ditambahkan!");
-      }
-      setIsModalOpen(false);
-      router.reload({ only: ["usersList"] });
-    } catch (error) {
-      if (error.response?.data?.errors) {
-        setFormErrors(error.response.data.errors);
-      } else {
-        alert(error.response?.data?.message || "Terjadi kesalahan saat menyimpan data");
-      }
-    } finally {
-      setIsSaving(false);
+    if (editingUser) {
+      router.put(`/users/${editingUser.id}`, formData, options);
+    } else {
+      router.post("/users", formData, options);
     }
   };
 
   // Handle delete confirmation
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!deleteConfirm.user) return;
     setIsDeleting(true);
-    try {
-      await axios.delete(`/users/${deleteConfirm.user.id}`);
-      showToast(`User "${deleteConfirm.user.name || deleteConfirm.user.email}" berhasil dihapus!`);
-      setDeleteConfirm({ show: false, user: null });
-      router.reload({ only: ["usersList"] });
-    } catch (error) {
-      alert(error.response?.data?.error || error.response?.data?.message || "Gagal menghapus user");
-    } finally {
-      setIsDeleting(false);
-    }
+    router.delete(`/users/${deleteConfirm.user.id}`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        showToast(`User "${deleteConfirm.user.name || deleteConfirm.user.email}" berhasil dihapus!`);
+        setDeleteConfirm({ show: false, user: null });
+      },
+      onError: (errors) => {
+        showToast(errors.error || "Gagal menghapus user", "error");
+      },
+      onFinish: () => setIsDeleting(false),
+    });
   };
 
   // Handle inline role change dropdown
-  const onRoleChange = async (userId, newRole) => {
+  const onRoleChange = (userId, newRole) => {
     setUpdatingId(userId);
-    try {
-      if (handleUpdateRole) {
-        await handleUpdateRole(userId, newRole);
-      } else {
-        await axios.put(`/users/${userId}/role`, { role: newRole });
-        router.reload({ only: ["usersList"] });
-      }
-      showToast("Hak akses user berhasil diperbarui!");
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "Gagal memperbarui hak akses");
-    } finally {
-      setUpdatingId(null);
-    }
+    router.put(`/users/${userId}/role`, { role: newRole }, {
+      preserveScroll: true,
+      only: ["usersList", "activityLogs"],
+      onSuccess: () => showToast("Hak akses user berhasil diperbarui!"),
+      onError: (errors) => {
+        showToast(errors.role || "Gagal memperbarui hak akses", "error");
+      },
+      onFinish: () => setUpdatingId(null),
+    });
   };
 
   // Filter
@@ -444,7 +431,7 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
                     />
                   </div>
                   {formErrors.name && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.name[0]}</p>
+                    <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
                   )}
                 </div>
 
@@ -465,7 +452,7 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
                     />
                   </div>
                   {formErrors.email && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.email[0]}</p>
+                    <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
                   )}
                 </div>
 
@@ -526,7 +513,7 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
                     </p>
                   )}
                   {formErrors.password && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.password[0]}</p>
+                    <p className="text-xs text-red-500 mt-1">{formErrors.password}</p>
                   )}
                 </div>
 
@@ -559,7 +546,7 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
                     <p className="text-xs text-red-500 mt-1 font-medium">Konfirmasi password tidak cocok!</p>
                   )}
                   {formErrors.password_confirmation && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.password_confirmation[0]}</p>
+                    <p className="text-xs text-red-500 mt-1">{formErrors.password_confirmation}</p>
                   )}
                 </div>
 
@@ -581,7 +568,7 @@ export default function KelolaAkses({ usersList = [], handleUpdateRole }) {
                     )}
                   </select>
                   {formErrors.role && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.role[0]}</p>
+                    <p className="text-xs text-red-500 mt-1">{formErrors.role}</p>
                   )}
                 </div>
               </div>

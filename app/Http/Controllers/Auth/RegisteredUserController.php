@@ -41,7 +41,6 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => 'nullable|string|in:admin,logistic_officer,guest',
             'captcha' => ['required', 'string'],
         ], [
             'name.required' => 'Nama lengkap wajib diisi.',
@@ -61,13 +60,11 @@ class RegisteredUserController extends Controller
             ]);
         }
 
-        $role = $request->input('role', 'logistic_officer');
-
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => $role,
+            'role' => 'guest',
         ]);
 
         ActivityLog::create([

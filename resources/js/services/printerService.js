@@ -1,5 +1,5 @@
 // resources/js/services/printerService.js
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { parseIndoDateToISO, parseRobustDate } from "../utils/deviceUtils";
 import { downloadExcelTemplate } from '../utils/excelHelper';
@@ -8,7 +8,7 @@ import { downloadExcelTemplate } from '../utils/excelHelper';
  * Tambah satu data printer.
  */
 export const addPrinter = async (formData) => {
-  const response = await axios.post('/printers', formData);
+  const response = await visitInertia('/printers', { method: 'post', data: formData });
   router.reload({ only: ['printers', 'activityLogs', 'outlets'] });
   return response.data;
 };
@@ -17,7 +17,7 @@ export const addPrinter = async (formData) => {
  * Perbarui data printer berdasarkan id.
  */
 export const updatePrinter = async (id, formData) => {
-  const response = await axios.put(`/printers/${id}`, formData);
+  const response = await visitInertia(`/printers/${id}`, { method: 'put', data: formData });
   router.reload({ only: ['printers', 'activityLogs', 'outlets'] });
   return response.data;
 };
@@ -26,7 +26,7 @@ export const updatePrinter = async (id, formData) => {
  * Hapus data printer berdasarkan id.
  */
 export const deletePrinter = async (id) => {
-  const response = await axios.delete(`/printers/${id}`);
+  const response = await visitInertia(`/printers/${id}`, { method: 'delete' });
   router.reload({ only: ['printers', 'activityLogs'] });
   return response.data;
 };
@@ -130,12 +130,10 @@ export const importPrinterCSV = async (rows) => {
     });
   }
 
-  await axios.post('/printers/import', { rows: formattedRows });
+  await visitInertia('/printers/import', { method: 'post', data: { rows: formattedRows } });
   router.reload({ only: ['printers', 'activityLogs', 'outlets'] });
   return formattedRows.length;
 };
-
-export const importPrinterExcel = importPrinterCSV;
 
 /**
  * Trigger download file Excel template import.

@@ -1,7 +1,7 @@
 // resources/js/hooks/useTransaksi.js
 // Form surat, generate nomor, log aktivitas, save + update stok
 import { useState } from "react";
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { createInitialFormData, createInitialItem } from "../constants";
 
@@ -117,7 +117,7 @@ export function useTransaksi({
         }))
       };
 
-      const response = await axios.post('/transactions', payload);
+      const response = await visitInertia('/transactions', { method: 'post', data: payload });
       
       if (response.data.success) {
         const savedTrx = response.data.transaction;

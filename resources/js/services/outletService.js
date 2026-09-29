@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { visitInertia } from '../utils/inertiaRequest';
 import { router } from '@inertiajs/react';
 import { downloadExcelTemplate } from '../utils/excelHelper';
 
@@ -73,11 +73,9 @@ export const importOutletCSV = async (rows) => {
     throw new Error("Tidak ada data instansi yang valid ditemukan. Periksa kembali nama header kolom CSV Anda.");
   }
 
-  await axios.post('/outlets/import', { rows: formattedRows });
+  await visitInertia('/outlets/import', { method: 'post', data: { rows: formattedRows } });
   return formattedRows.length;
 };
-
-export const importOutletExcel = importOutletCSV;
 
 /**
  * Trigger download file Excel template import.

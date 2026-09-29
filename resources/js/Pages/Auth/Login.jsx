@@ -1,9 +1,8 @@
 // resources/js/Pages/Auth/Login.jsx
 import React, { useState, useEffect } from 'react';
-import { useForm, Head, Link } from '@inertiajs/react';
+import { useForm, Head, Link, router } from '@inertiajs/react';
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, RotateCw, AlertTriangle, ArrowRight } from "lucide-react";
 import InputError from '@/Components/InputError';
-import axios from 'axios';
 
 export default function Login({ status, captchaSvg }) {
     const [showPassword, setShowPassword] = useState(false);
@@ -28,17 +27,14 @@ export default function Login({ status, captchaSvg }) {
 
     const refreshCaptcha = async () => {
         setIsRefreshingCaptcha(true);
-        try {
-            const res = await axios.get(route('captcha.refresh'));
-            if (res.data && res.data.captchaSvg) {
-                setCaptchaImage(res.data.captchaSvg);
+        router.reload({
+            only: ['captchaSvg'],
+            onSuccess: (page) => {
+                setCaptchaImage(page.props.captchaSvg || '');
                 setData('captcha', '');
-            }
-        } catch (err) {
-            console.error("Gagal refresh captcha", err);
-        } finally {
-            setIsRefreshingCaptcha(false);
-        }
+            },
+            onFinish: () => setIsRefreshingCaptcha(false),
+        });
     };
 
     const handleLogin = (e) => {

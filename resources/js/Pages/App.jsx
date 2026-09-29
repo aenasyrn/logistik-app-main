@@ -9,8 +9,6 @@ import { VIEW_TITLES } from "../constants/tabConfig";
 import { useNotif } from "../hooks/useNotif";
 import { useTabs } from "../hooks/useTabs";
 import { useTransaksi } from "../hooks/useTransaksi";
-import axios from 'axios';
-import { fetchJenisMeubelair } from "../services/meubelairService";
 import useIdleTimeout from "../hooks/useIdleTimeout";
 
 import { calculateAutoStatus } from "../utils/deviceUtils";
@@ -139,14 +137,7 @@ export default function App(props) {
   useEffect(() => { setOutletAreas(props.outletAreas || []); }, [props.outletAreas]);
 
   const handleRefreshJenis = async () => {
-    try {
-      const data = await fetchJenisMeubelair();
-      if (Array.isArray(data)) {
-        setJenisMeubelairs(data);
-      }
-    } catch (err) {
-      console.error("Failed to refresh jenis meubelair:", err);
-    }
+    router.reload({ only: ["jenisMeubelairs"] });
   };
 
   const [landFilter, setLandFilter] = useState("");
@@ -323,6 +314,7 @@ export default function App(props) {
       router.reload({
         only: propsToLoad,
         onError: () => propsToLoad.forEach((prop) => lazyRequestedRef.current.delete(prop)),
+        onCancel: () => propsToLoad.forEach((prop) => lazyRequestedRef.current.delete(prop)),
       });
     }
   }, [activeTab, userRole, props]);
@@ -400,19 +392,6 @@ export default function App(props) {
       window.removeEventListener("touchend", handleTouchEnd);
     };
   }, [isSidebarOpen]);
-
-  // Handle User Role update via Laravel API
-  const handleUpdateRole = async (userId, newRole) => {
-    try {
-      await axios.put(`/users/${userId}/role`, { role: newRole });
-      router.reload({ only: ['usersList', 'activityLogs'] });
-      showNotif(`Role berhasil diubah menjadi ${newRole.toUpperCase()}`, "success");
-    } catch (error) {
-      const msg = error.response?.data?.message || "Gagal mengubah role";
-      showNotif(msg, "error");
-      throw error;
-    }
-  };
 
   // Swipe back navigation gesture (left-to-right swipe)
   useEffect(() => {
@@ -626,7 +605,6 @@ export default function App(props) {
             handleSaveTransaction={handleSaveTransaction}
             isSaving={isSaving}
             setView={handleSetView}
-            handleUpdateRole={handleUpdateRole}
             landFilter={landFilter}
             setLandFilter={setLandFilter}
             sewaFilter={sewaFilter}

@@ -1,9 +1,8 @@
 // resources/js/Pages/Auth/Register.jsx
 import React, { useState } from 'react';
-import { useForm, Head, Link } from '@inertiajs/react';
+import { useForm, Head, Link, router } from '@inertiajs/react';
 import { Eye, EyeOff, ShieldCheck, RotateCw } from "lucide-react";
 import InputError from '@/Components/InputError';
-import axios from 'axios';
 
 export default function Register({ captchaSvg }) {
     const [showPassword, setShowPassword] = useState(false);
@@ -14,7 +13,6 @@ export default function Register({ captchaSvg }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
-        role: 'logistic_officer',
         password: '',
         password_confirmation: '',
         captcha: '',
@@ -22,17 +20,14 @@ export default function Register({ captchaSvg }) {
 
     const refreshCaptcha = async () => {
         setIsRefreshingCaptcha(true);
-        try {
-            const res = await axios.get(route('captcha.refresh'));
-            if (res.data && res.data.captchaSvg) {
-                setCaptchaImage(res.data.captchaSvg);
+        router.reload({
+            only: ['captchaSvg'],
+            onSuccess: (page) => {
+                setCaptchaImage(page.props.captchaSvg || '');
                 setData('captcha', '');
-            }
-        } catch (err) {
-            console.error("Gagal refresh captcha", err);
-        } finally {
-            setIsRefreshingCaptcha(false);
-        }
+            },
+            onFinish: () => setIsRefreshingCaptcha(false),
+        });
     };
 
     const handleRegister = (e) => {
@@ -142,6 +137,9 @@ export default function Register({ captchaSvg }) {
                             <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
                                 Register
                             </h1>
+                            <p className="mt-2 text-xs text-emerald-200/80">
+                                Akun baru mendapat akses tamu. Hubungi administrator untuk meminta akses tambahan.
+                            </p>
                         </div>
 
                         <form onSubmit={handleRegister} className="space-y-3 sm:space-y-3.5">
@@ -182,25 +180,6 @@ export default function Register({ captchaSvg }) {
                                     />
                                 </div>
                                 <InputError message={errors.email} className="mt-1 pl-3 text-red-300 text-xs" />
-                            </div>
-
-                            {/* Field Pilihan Peran (Role) */}
-                            <div>
-                                <label className="block text-xs sm:text-sm font-medium text-emerald-100/90 mb-1 pl-1">
-                                    Pilihan Peran (Role)
-                                </label>
-                                <div className="relative">
-                                    <select
-                                        value={data.role}
-                                        onChange={(e) => setData('role', e.target.value)}
-                                        className="w-full px-4 py-2.5 sm:py-3 bg-[#122e20] border border-emerald-700/70 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/25 transition-all shadow-sm cursor-pointer"
-                                    >
-                                        <option value="logistic_officer" className="bg-[#122e20] text-white">Logistik Officer</option>
-                                        <option value="guest" className="bg-[#122e20] text-white">Guest / Tamu</option>
-                                        <option value="admin" className="bg-[#122e20] text-white">Administrator</option>
-                                    </select>
-                                </div>
-                                <InputError message={errors.role} className="mt-1 pl-3 text-red-300 text-xs" />
                             </div>
 
                             {/* Grid 2 Kolom: Password & Konfirmasi Password */}
@@ -262,7 +241,7 @@ export default function Register({ captchaSvg }) {
 
                             {/* Field Captcha Keamanan SMARTLOG */}
                             <div className="pt-0.5">
-                                <label className="block text-xs font-medium text-emerald-100/90 mb-1 pl-1 flex items-center gap-1.5">
+                                <label className="block text-xs font-medium text-emerald-100/90 mb-1 pl-1 items-center gap-1.5">
                                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                                     Kode Keamanan (Captcha)
                                 </label>

@@ -1,7 +1,7 @@
 // resources/js/Components/Bangunan/SaranaPengamanan/index.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Shield, Search, Plus, FileSpreadsheet, Edit, Trash2, X, Loader2, FileText, Upload } from "lucide-react";
-import axios from "axios";
+import { visitInertia } from "@/utils/inertiaRequest";
 import { router } from "@inertiajs/react";
 import * as XLSX from "xlsx";
 import { parseExcelFile } from "../../../utils/excelHelper";
@@ -540,7 +540,7 @@ export default function SaranaPengamanan({ userRole, facilities = [], outlets = 
     setLocalStatuses(prev => ({ ...prev, [id]: newStatus }));
 
     try {
-      await axios.put(`/security-facilities/${id}/status`, { status: newStatus });
+      await visitInertia(`/security-facilities/${id}/status`, { method: "put", data: { status: newStatus } });
       router.reload({
         only: ["securityFacilities", "activityLogs"],
         onSuccess: () => {
